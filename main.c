@@ -30,8 +30,9 @@ const char* my_shader2 =
 "};\n"
 "\n"
 "struct Uniforms {\n"
-"	xyzw: vec4<f32>;\n"
-"	rgba: vec4<f32>;\n"
+"	distort: f32;\n"
+"	alpha: f32;\n"
+"	frame: u32;\n"
 "};\n"
 "[[group(0), binding(0)]]\n"
 "var<uniform> uniforms: Uniforms;\n"
@@ -41,15 +42,20 @@ const char* my_shader2 =
 "	[[location(0)]] xyzw: vec4<f32>,\n"
 "	[[location(1)]] rgba: vec4<f32>,\n"
 ") -> VertexOutput {\n"
+"	let m: f32 = 10.0;\n"
+"	let a: f32 = f32(uniforms.frame) * 0.01;\n"
+"	let ud: f32 = uniforms.distort;\n"
+"	let distort = vec2<f32>(ud*sin(m*xyzw.x + a), ud*cos(m*xyzw.y + a));\n"
+"	let pos = xyzw.xy;\n"
 "	var out: VertexOutput;\n"
-"	out.position = vec4<f32>(xyzw.xy, 0.0, 1.0);\n"
+"	out.position = vec4<f32>(pos+distort, 0.0, 1.0);\n"
 "	out.rgba = rgba;\n"
 "	return out;\n"
 "}\n"
 "\n"
 "[[stage(fragment)]]\n"
 "fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {\n"
-"	return in.rgba;\n"
+"	return in.rgba * uniforms.alpha;\n"
 "}\n";
 
 
@@ -145,6 +151,12 @@ struct Vertex {
 	float rgba[4];
 };
 
+struct Uniforms {
+	float distort;
+	float alpha;
+	int frame;
+};
+
 int main(int argc, char** argv)
 {
 	//wgpuSetLogLevel(WGPULogLevel_Trace);
@@ -220,8 +232,8 @@ int main(int argc, char** argv)
 		instance,
 		&(WGPURequestAdapterOptions){
 			.compatibleSurface = surface,
-			.nextInChain = &(WGPUAdapterExtras) {
-				.chain = (WGPUChainedStruct){
+			.nextInChain = (const WGPUChainedStruct*) &(WGPUAdapterExtras) {
+				.chain = (WGPUChainedStruct) {
 					.next = NULL,
 					.sType = WGPUSType_AdapterExtras,
 				},
@@ -318,14 +330,9 @@ int main(int argc, char** argv)
 	});
 	assert(vtxbuf);
 
-	struct unibuf {
-		float xyzw[4];
-		float rgba[4];
-	} unibuf_local;
-
 	WGPUBuffer unibuf = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor){
 		.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_MapWrite,
-		.size = sizeof(unibuf_local),
+		.size = sizeof(struct Uniforms),
 	});
 	assert(unibuf);
 
@@ -334,12 +341,12 @@ int main(int argc, char** argv)
 		.entries = (WGPUBindGroupLayoutEntry[]){
 			(WGPUBindGroupLayoutEntry){
 				.binding = 0,
-				.visibility = WGPUShaderStage_Vertex,
+				.visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment,
 				.buffer = (WGPUBufferBindingLayout){
 					.type = WGPUBufferBindingType_Uniform,
 					//.type = WGPUBufferBindingType_Storage,
 					.hasDynamicOffset = false,
-					.minBindingSize = sizeof(unibuf_local),
+					.minBindingSize = sizeof(struct Uniforms),
 				},
 			},
 			#if 0
@@ -390,7 +397,7 @@ int main(int argc, char** argv)
 				.binding = 0,
 				.buffer = unibuf,
 				.offset = 0,
-				.size = sizeof(unibuf_local),
+				.size = sizeof(struct Uniforms),
 			}, 
 			#if 0
 			(WGPUBindGroupEntry){
@@ -478,6 +485,8 @@ int main(int argc, char** argv)
 	int iteration = 0;
 	int exiting = 0;
 	int new_swap_chain = 0;
+	int mx = 0;
+	int my = 0;
 	while (!exiting) {
 		while (XPending(display)) {
 			XEvent xe;
@@ -511,6 +520,8 @@ int main(int argc, char** argv)
 				break;
 			case MotionNotify:
 				printf("EV: motion\n");
+				mx = xe.xmotion.x;
+				my = xe.xmotion.y;
 				break;
 			case KeyPress:
 			case KeyRelease:
@@ -576,6 +587,14 @@ int main(int argc, char** argv)
 			wgpuBufferUnmap(vtxbuf);
 		}
 
+		{
+			struct Uniforms* u = wgpuBufferMap(device, unibuf, WGPUMapMode_Write, 0, sizeof(*u));
+			u->frame = iteration;
+			u->distort = (((float)my / (float)height) - 0.5f) * 2.5f;
+			u->alpha = ((float)mx / (float)width) * 5.0f;
+			wgpuBufferUnmap(unibuf);
+		}
+
 		WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(
 			device,
 			&(WGPUCommandEncoderDescriptor){.label = "Command Encoder"}
@@ -589,7 +608,7 @@ int main(int argc, char** argv)
 					.resolveTarget = 0,
 					.loadOp = WGPULoadOp_Clear,
 					.storeOp = WGPUStoreOp_Store,
-					.clearColor = (WGPUColor){0},
+					.clearColor = (WGPUColor){.b=0.1},
 				},
 				.colorAttachmentCount = 1,
 				.depthStencilAttachment = NULL,
