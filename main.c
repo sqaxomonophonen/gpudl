@@ -272,6 +272,9 @@ int main(int argc, char** argv)
 	);
 	assert((device != NULL) && "got no device");
 
+	WGPUQueue queue = wgpuDeviceGetQueue(device);
+	assert(queue);
+
 	wgpuDeviceSetUncapturedErrorCallback(device, wgpu_error_callback, NULL);
 	//wgpuGetProcAddress(device, "uhuh buhuh");
 
@@ -603,6 +606,7 @@ int main(int argc, char** argv)
 		WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(
 			encoder,
 			&(WGPURenderPassDescriptor){
+				.colorAttachmentCount = 1,
 				.colorAttachments = &(WGPURenderPassColorAttachment){
 					.view = nextTexture,
 					.resolveTarget = 0,
@@ -610,7 +614,6 @@ int main(int argc, char** argv)
 					.storeOp = WGPUStoreOp_Store,
 					.clearColor = (WGPUColor){.b=0.1},
 				},
-				.colorAttachmentCount = 1,
 				.depthStencilAttachment = NULL,
 			}
 		);
@@ -621,7 +624,6 @@ int main(int argc, char** argv)
 		wgpuRenderPassEncoderDraw(renderPass, n_vertices, 1, 0, 0);
 		wgpuRenderPassEncoderEndPass(renderPass);
 
-		WGPUQueue queue = wgpuDeviceGetQueue(device);
 		WGPUCommandBuffer cmdBuffer = wgpuCommandEncoderFinish(
 			encoder,
 			&(WGPUCommandBufferDescriptor){.label = NULL}
