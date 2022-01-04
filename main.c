@@ -114,23 +114,6 @@ static void get_window_dim(Window window, int* return_width, int* return_height)
 	if (return_height) *return_height = height;
 }
 
-static WGPUSwapChain mk_swap_chain(WGPUDevice device, WGPUSurface surface, WGPUTextureFormat swapChainFormat, int width, int height)
-{
-	return wgpuDeviceCreateSwapChain(
-		device,
-		surface,
-		&(WGPUSwapChainDescriptor){
-			.usage = WGPUTextureUsage_RenderAttachment,
-			.format = swapChainFormat,
-			.width = width,
-			.height = height,
-			.presentMode = WGPUPresentMode_Fifo,
-			//.presentMode = WGPUPresentMode_Mailbox,
-		}
-	);
-}
-
-
 static void wgpu_log(WGPULogLevel level, const char *msg)
 {
 	printf("LOG[%d] :: %s\n", level, msg ? msg : "<nil>");
@@ -543,7 +526,20 @@ int main(int argc, char** argv)
 					printf("EV: configure %d×%d (was %d×%d)\n", xe.xconfigure.width, xe.xconfigure.height, width, height);
 					width = xe.xconfigure.width;
 					height = xe.xconfigure.height;
-					swapChain = mk_swap_chain(device, surface, swapChainFormat, width, height);
+
+					swapChain = wgpuDeviceCreateSwapChain(
+						device,
+						surface,
+						&(WGPUSwapChainDescriptor){
+							.usage = WGPUTextureUsage_RenderAttachment,
+							.format = swapChainFormat,
+							.width = width,
+							.height = height,
+							.presentMode = WGPUPresentMode_Fifo,
+							//.presentMode = WGPUPresentMode_Mailbox,
+						}
+					);
+
 					new_swap_chain = 1;
 					assert(swapChain);
 				}
