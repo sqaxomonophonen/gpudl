@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #include <X11/Xlib.h>
 
@@ -104,6 +105,11 @@ static void wgpu_error_callback(WGPUErrorType type, char const* message, void* u
 	}
 	fprintf(stderr, "WGPU UNCAPTURED ERROR %s: %s\n", ts, message);
 }
+
+struct Vertex {
+	float xyzw[4];
+	float rgba[4];
+};
 
 int main(int argc, char** argv)
 {
@@ -210,10 +216,10 @@ int main(int argc, char** argv)
 	);
 	assert((device != NULL) && "got no device");
 
-	//wgpuDeviceSetUncapturedErrorCallback(device, wgpu_error_callback, NULL);
+	wgpuDeviceSetUncapturedErrorCallback(device, wgpu_error_callback, NULL);
 	//wgpuGetProcAddress(device, "uhuh buhuh");
 
-	#if 0
+	#if 1
 	WGPUAdapterProperties properties = {0};
 	wgpuAdapterGetProperties(adapter, &properties);
 	printf("vendor id: %d\n", properties.vendorID);
@@ -258,29 +264,146 @@ int main(int argc, char** argv)
 	#undef DUMP32
 	#endif
 
+	struct Vertex vtxbuf_local[0x1000];
+	#define ARRAY_SIZE(xs) (sizeof(xs) / sizeof(xs[0]))
+
+	//uint64_t vtxbuf_sz = 100;
+
+	WGPUBuffer vtxbuf = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor){
+		.usage = WGPUBufferUsage_Vertex | WGPUBufferUsage_MapWrite,
+		.size = sizeof(vtxbuf_local),
+		.mappedAtCreation = 1,
+	});
+	assert(vtxbuf);
+	{
+		void* dst = wgpuBufferGetMappedRange(vtxbuf, 0, sizeof(vtxbuf_local));
+		assert(dst);
+		memcpy(dst, vtxbuf_local, sizeof(vtxbuf_local));
+	}
+	wgpuBufferUnmap(vtxbuf); // XXX try without
+
+	struct unibuf {
+		float xyzw[4];
+		float rgba[4];
+	} unibuf_local;
+
+	WGPUBuffer unibuf = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor){
+		.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_MapWrite,
+		.size = sizeof(unibuf_local),
+		.mappedAtCreation = 1,
+	});
+	assert(unibuf);
+	{
+		void* dst = wgpuBufferGetMappedRange(unibuf, 0, sizeof(unibuf_local));
+		assert(dst);
+		memcpy(dst, &unibuf_local, sizeof(unibuf_local));
+	}
+	wgpuBufferUnmap(unibuf); // XXX try without
+
+
+	WGPUBindGroupLayout bind_group_layout = wgpuDeviceCreateBindGroupLayout(device, &((WGPUBindGroupLayoutDescriptor){
+		.entryCount = 1,
+		.entries = (WGPUBindGroupLayoutEntry[]){
+			(WGPUBindGroupLayoutEntry){
+				.binding = 0,
+				.visibility = WGPUShaderStage_Vertex,
+				.buffer = (WGPUBufferBindingLayout){
+					.type = WGPUBufferBindingType_Uniform,
+					//.type = WGPUBufferBindingType_Storage,
+					.hasDynamicOffset = false,
+					.minBindingSize = sizeof(unibuf_local),
+				},
+			},
+			#if 0
+			(WGPUBindGroupLayoutEntry){
+				.binding = 1,
+				.visibility = WGPUShaderStage_Fragment,
+				.texture = (WGPUTextureBindingLayout){
+					.multisampled = false,
+					.sampleType = WGPUTextureSampleType_Uint, // WGPUTextureSampleType_Depth
+					.viewDimension = WGPUTextureViewDimension_2D,
+				},
+				#if 0
+				.sampler = (WGPUSamplerBindingLayout){
+					.type = WGPUSamplerBindingType_NonFiltering,
+				},
+				.storageTexture = (WGPUStorageTextureBindingLayout){
+					.access = WGPUStorageTextureAccess_WriteOnly,
+					.format = WGPUTextureFormat_R32Float,
+					.viewDimension = WGPUTextureViewDimension_2D,
+				},
+				#endif
+				// TODO
+			},
+			#endif
+		},
+	}));
+	assert(bind_group_layout);
+
 	WGPUShaderModuleDescriptor shaderSource = load_wgsl(my_shader);
 	WGPUShaderModule shader = wgpuDeviceCreateShaderModule(device, &shaderSource);
 
-	WGPUPipelineLayout pipelineLayout = wgpuDeviceCreatePipelineLayout(
+	WGPUPipelineLayout pipeline_layout = wgpuDeviceCreatePipelineLayout(
 		device,
 		&(WGPUPipelineLayoutDescriptor){
-			.bindGroupLayouts = NULL,
-			.bindGroupLayoutCount = 0,
+			.bindGroupLayoutCount = 1,
+			.bindGroupLayouts = (WGPUBindGroupLayout[]){
+				bind_group_layout,
+			},
 		}
 	);
 
+	WGPUBindGroup bind_group = wgpuDeviceCreateBindGroup(device, &(WGPUBindGroupDescriptor){
+		.layout = bind_group_layout,
+		.entryCount = 1,
+		.entries = (WGPUBindGroupEntry[]){
+			(WGPUBindGroupEntry){
+				.binding = 0,
+				.buffer = unibuf,
+				.offset = 0,
+				.size = sizeof(unibuf_local),
+			}, 
+			#if 0
+			(WGPUBindGroupEntry){
+				.binding = 1,
+				.buffer = unibuf,
+				.offset = 0,
+			},
+			#endif
+		},
+	});
+	
 	WGPUTextureFormat swapChainFormat = wgpuSurfaceGetPreferredFormat(surface, adapter);
 
 	WGPURenderPipeline pipeline = wgpuDeviceCreateRenderPipeline(
 		device,
 		&(WGPURenderPipelineDescriptor){
 			.label = "Render pipeline",
-			.layout = pipelineLayout,
+			.layout = pipeline_layout,
 			.vertex = (WGPUVertexState){
 				.module = shader,
 				.entryPoint = "vs_main",
-				.bufferCount = 0,
-				.buffers = NULL,
+				.bufferCount = 1,
+				//.buffers = NULL,
+				.buffers = (WGPUVertexBufferLayout[]){
+					(WGPUVertexBufferLayout){
+						.arrayStride = sizeof(struct Vertex),
+						.stepMode = WGPUVertexStepMode_Vertex,
+						.attributeCount = 2,
+						.attributes = (WGPUVertexAttribute[]) {
+							(WGPUVertexAttribute){
+								.format = WGPUVertexFormat_Float32x4,
+								.offset = 0,
+								.shaderLocation = 0,
+							},
+							(WGPUVertexAttribute){
+								.format = WGPUVertexFormat_Float32x4,
+								.offset = 4*4,
+								.shaderLocation = 1,
+							},
+						},
+					},
+				},
 			},
 			.primitive = (WGPUPrimitiveState){
 				.topology = WGPUPrimitiveTopology_TriangleList,
@@ -413,6 +536,9 @@ int main(int argc, char** argv)
 		);
 
 		wgpuRenderPassEncoderSetPipeline(renderPass, pipeline);
+		wgpuRenderPassEncoderSetBindGroup(renderPass, 0, bind_group, 0, 0);
+		//wgpuRenderPassEncoderSetIndexBuffer(
+		wgpuRenderPassEncoderSetVertexBuffer(renderPass, 0, vtxbuf, 0, sizeof(vtxbuf_local));
 		wgpuRenderPassEncoderDraw(renderPass, 3, 1, 0, 0);
 		wgpuRenderPassEncoderEndPass(renderPass);
 
@@ -428,7 +554,7 @@ int main(int argc, char** argv)
 	}
 
 	wgpuRenderPipelineDrop(pipeline);
-	wgpuPipelineLayoutDrop(pipelineLayout);
+	wgpuPipelineLayoutDrop(pipeline_layout);
 	wgpuShaderModuleDrop(shader);
 
 	XCloseDisplay(display);
