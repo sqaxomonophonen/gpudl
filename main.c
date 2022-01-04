@@ -298,12 +298,13 @@ int main(int argc, char** argv)
 	#undef DUMP32
 	#endif
 
-	struct Vertex vtxbuf_local[0x1000];
-	#define ARRAY_LEN(xs) (sizeof(xs) / sizeof(xs[0]))
+	const int n_triangles = 200;
+	const int n_vertices = 3 * n_triangles;
+	const size_t vtxbuf_sz = n_vertices * sizeof(struct Vertex);
 
 	WGPUBuffer vtxbuf = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor){
 		.usage = WGPUBufferUsage_Vertex | WGPUBufferUsage_MapWrite,
-		.size = sizeof(vtxbuf_local),
+		.size = vtxbuf_sz,
 	});
 	assert(vtxbuf);
 
@@ -527,13 +528,10 @@ int main(int argc, char** argv)
 		}
 		new_swap_chain = 0;
 
-		const int n_triangles = 200;
-		const int n_vertices = 3 * n_triangles;
 		{
-			const size_t mapsz = sizeof(vtxbuf_local[0]) * n_vertices;
-			assert(mapsz <= sizeof(vtxbuf_local));
+			struct Vertex* vertices = wgpuBufferMap(device, vtxbuf, WGPUMapMode_Write, 0, vtxbuf_sz);
 
-			struct Vertex* p = vtxbuf_local;
+			struct Vertex* p = vertices;
 			for (int i = 0; i < n_triangles; i++) {
 
 				float x = -1.0f + 2.0f * ((float)i / (float)(n_triangles-1));
@@ -565,9 +563,6 @@ int main(int argc, char** argv)
 				};
 			}
 
-			void* dst = wgpuBufferMap(device, vtxbuf, WGPUMapMode_Write, 0, mapsz);
-			assert(dst);
-			memcpy(dst, vtxbuf_local, mapsz);
 			wgpuBufferUnmap(vtxbuf);
 		}
 
@@ -593,7 +588,7 @@ int main(int argc, char** argv)
 
 		wgpuRenderPassEncoderSetPipeline(renderPass, pipeline);
 		wgpuRenderPassEncoderSetBindGroup(renderPass, 0, bind_group, 0, 0);
-		wgpuRenderPassEncoderSetVertexBuffer(renderPass, 0, vtxbuf, 0, sizeof(vtxbuf_local));
+		wgpuRenderPassEncoderSetVertexBuffer(renderPass, 0, vtxbuf, 0, vtxbuf_sz);
 		wgpuRenderPassEncoderDraw(renderPass, n_vertices, 1, 0, 0);
 		wgpuRenderPassEncoderEndPass(renderPass);
 
