@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 #include <X11/Xlib.h>
 
@@ -300,43 +301,11 @@ int main(int argc, char** argv)
 	struct Vertex vtxbuf_local[0x1000];
 	#define ARRAY_LEN(xs) (sizeof(xs) / sizeof(xs[0]))
 
-	vtxbuf_local[0].xyzw[0] = -1;
-	vtxbuf_local[0].xyzw[1] = -1;
-
-	vtxbuf_local[1].xyzw[0] = 1;
-	vtxbuf_local[1].xyzw[1] = -1;
-
-	vtxbuf_local[2].xyzw[0] = 0;
-	vtxbuf_local[2].xyzw[1] = 1;
-
-	vtxbuf_local[0].rgba[0] = 0;
-	vtxbuf_local[0].rgba[1] = 0;
-	vtxbuf_local[0].rgba[2] = 1;
-	vtxbuf_local[0].rgba[3] = 0;
-
-	vtxbuf_local[1].rgba[0] = 0;
-	vtxbuf_local[1].rgba[1] = 0;
-	vtxbuf_local[1].rgba[2] = 0;
-	vtxbuf_local[1].rgba[3] = 0;
-
-	vtxbuf_local[2].rgba[0] = 1;
-	vtxbuf_local[2].rgba[1] = 0;
-	vtxbuf_local[2].rgba[2] = 1;
-	vtxbuf_local[2].rgba[3] = 1;
-
-	//uint64_t vtxbuf_sz = 100;
-
 	WGPUBuffer vtxbuf = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor){
 		.usage = WGPUBufferUsage_Vertex | WGPUBufferUsage_MapWrite,
 		.size = sizeof(vtxbuf_local),
 	});
 	assert(vtxbuf);
-	{
-		void* dst = wgpuBufferMap(device, vtxbuf, WGPUMapMode_Write, 0, sizeof(vtxbuf_local));
-		assert(dst);
-		memcpy(dst, vtxbuf_local, sizeof(vtxbuf_local));
-		wgpuBufferUnmap(vtxbuf);
-	}
 
 	struct unibuf {
 		float xyzw[4];
@@ -348,15 +317,6 @@ int main(int argc, char** argv)
 		.size = sizeof(unibuf_local),
 	});
 	assert(unibuf);
-	#if 0
-	{
-		void* dst = wgpuBufferGetMappedRange(unibuf, 0, sizeof(unibuf_local));
-		assert(dst);
-		memcpy(dst, &unibuf_local, sizeof(unibuf_local));
-	}
-	wgpuBufferUnmap(unibuf); // XXX try without
-	#endif
-
 
 	WGPUBindGroupLayout bind_group_layout = wgpuDeviceCreateBindGroupLayout(device, &((WGPUBindGroupLayoutDescriptor){
 		.entryCount = 1,
@@ -442,7 +402,6 @@ int main(int argc, char** argv)
 				.module = shader,
 				.entryPoint = "vs_main",
 				.bufferCount = 1,
-				//.buffers = NULL,
 				.buffers = (WGPUVertexBufferLayout[]){
 					(WGPUVertexBufferLayout){
 						.arrayStride = sizeof(struct Vertex),
@@ -568,6 +527,50 @@ int main(int argc, char** argv)
 		}
 		new_swap_chain = 0;
 
+		const int n_triangles = 200;
+		const int n_vertices = 3 * n_triangles;
+		{
+			const size_t mapsz = sizeof(vtxbuf_local[0]) * n_vertices;
+			assert(mapsz <= sizeof(vtxbuf_local));
+
+			struct Vertex* p = vtxbuf_local;
+			for (int i = 0; i < n_triangles; i++) {
+
+				float x = -1.0f + 2.0f * ((float)i / (float)(n_triangles-1));
+				float y = -1.0f + 2.0f * ((float)i / (float)(n_triangles-1));
+
+				float a = (float)i + ((float)iteration) * 0.01f;
+				const float a120 = (M_PI/3)*2;
+				const float a240 = a120 * 2;
+
+				const float r = 0.05f;
+				float dx0 = r * sinf(a);
+				float dy0 = r * cosf(a);
+				float dx1 = r * sinf(a + a120);
+				float dy1 = r * cosf(a + a120);
+				float dx2 = r * sinf(a + a240);
+				float dy2 = r * cosf(a + a240);
+
+				*(p++) = (struct Vertex){
+					.xyzw = { x+dx0, y+dy0 },
+					.rgba = {1,0,0,1},
+				};
+				*(p++) = (struct Vertex){
+					.xyzw = { x+dx1, y+dy1 },
+					.rgba = {0,1,0,1},
+				};
+				*(p++) = (struct Vertex){
+					.xyzw = { x+dx2, y+dy2 },
+					.rgba = {0,0,1,1},
+				};
+			}
+
+			void* dst = wgpuBufferMap(device, vtxbuf, WGPUMapMode_Write, 0, mapsz);
+			assert(dst);
+			memcpy(dst, vtxbuf_local, mapsz);
+			wgpuBufferUnmap(vtxbuf);
+		}
+
 		WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(
 			device,
 			&(WGPUCommandEncoderDescriptor){.label = "Command Encoder"}
@@ -581,12 +584,7 @@ int main(int argc, char** argv)
 					.resolveTarget = 0,
 					.loadOp = WGPULoadOp_Clear,
 					.storeOp = WGPUStoreOp_Store,
-					.clearColor = (WGPUColor){
-						.r = (iteration & 32) ? 0.1 : 0.0,
-						.g = 0.0,
-						.b = 0.0,
-						.a = 0.0,
-					},
+					.clearColor = (WGPUColor){0},
 				},
 				.colorAttachmentCount = 1,
 				.depthStencilAttachment = NULL,
@@ -595,9 +593,8 @@ int main(int argc, char** argv)
 
 		wgpuRenderPassEncoderSetPipeline(renderPass, pipeline);
 		wgpuRenderPassEncoderSetBindGroup(renderPass, 0, bind_group, 0, 0);
-		//wgpuRenderPassEncoderSetIndexBuffer(
 		wgpuRenderPassEncoderSetVertexBuffer(renderPass, 0, vtxbuf, 0, sizeof(vtxbuf_local));
-		wgpuRenderPassEncoderDraw(renderPass, 3, 1, 0, 0);
+		wgpuRenderPassEncoderDraw(renderPass, n_vertices, 1, 0, 0);
 		wgpuRenderPassEncoderEndPass(renderPass);
 
 		WGPUQueue queue = wgpuDeviceGetQueue(device);
