@@ -213,12 +213,22 @@ int main(int argc, char** argv)
 			},
 	});
 
+	WGPUInstance instance = NULL; // XXX no wgpuCreateInstance() yet
+
 	WGPUAdapter adapter = NULL;
 	wgpuInstanceRequestAdapter(
-		NULL,
+		instance,
 		&(WGPURequestAdapterOptions){
-			.nextInChain = NULL,
 			.compatibleSurface = surface,
+			.nextInChain = &(WGPUAdapterExtras) {
+				.chain = (WGPUChainedStruct){
+					.next = NULL,
+					.sType = WGPUSType_AdapterExtras,
+				},
+				.backend = WGPUBackendType_Vulkan,
+				//.backend = WGPUBackendType_OpenGL, // XXX not supported
+				//.backend = WGPUBackendType_OpenGLES, // XXX not supported
+			},
 		},
 		request_adapter_callback,
 		(void*)&adapter
