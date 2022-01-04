@@ -20,6 +20,39 @@ const char* my_shader =
 "	return vec4<f32>(1.0, 0.0, 1.0, 1.0);\n"
 "}\n";
 
+
+
+const char* my_shader2 =
+"struct VertexOutput {\n"
+	"[[location(0)]] rgba: vec4<f32>;\n"
+	"[[builtin(position)]] position: vec4<f32>;\n"
+"};\n"
+"\n"
+"struct Uniforms {\n"
+"	xyzw: vec4<f32>;\n"
+"	rgba: vec4<f32>;\n"
+"};\n"
+"[[group(0), binding(0)]]\n"
+"var<uniform> uniforms: Uniforms;\n"
+"\n"
+"[[stage(vertex)]]\n"
+"fn vs_main(\n"
+"	[[location(0)]] xyzw: vec4<f32>,\n"
+"	[[location(1)]] rgba: vec4<f32>,\n"
+") -> VertexOutput {\n"
+"	var out: VertexOutput;\n"
+"	out.position = vec4<f32>(xyzw.xy, 0.0, 1.0);\n"
+"	out.rgba = rgba;\n"
+"	return out;\n"
+"}\n"
+"\n"
+"[[stage(fragment)]]\n"
+"fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {\n"
+"	return in.rgba;\n"
+"}\n";
+
+
+
 static int error_handler(Display* display, XErrorEvent* event) {
 	printf("X11 ERRORRGGH!\n");
 	return 0;
@@ -265,7 +298,31 @@ int main(int argc, char** argv)
 	#endif
 
 	struct Vertex vtxbuf_local[0x1000];
-	#define ARRAY_SIZE(xs) (sizeof(xs) / sizeof(xs[0]))
+	#define ARRAY_LEN(xs) (sizeof(xs) / sizeof(xs[0]))
+
+	vtxbuf_local[0].xyzw[0] = -1;
+	vtxbuf_local[0].xyzw[1] = -1;
+
+	vtxbuf_local[1].xyzw[0] = 1;
+	vtxbuf_local[1].xyzw[1] = -1;
+
+	vtxbuf_local[2].xyzw[0] = 0;
+	vtxbuf_local[2].xyzw[1] = 1;
+
+	vtxbuf_local[0].rgba[0] = 0;
+	vtxbuf_local[0].rgba[1] = 0;
+	vtxbuf_local[0].rgba[2] = 1;
+	vtxbuf_local[0].rgba[3] = 0;
+
+	vtxbuf_local[1].rgba[0] = 0;
+	vtxbuf_local[1].rgba[1] = 0;
+	vtxbuf_local[1].rgba[2] = 0;
+	vtxbuf_local[1].rgba[3] = 0;
+
+	vtxbuf_local[2].rgba[0] = 1;
+	vtxbuf_local[2].rgba[1] = 0;
+	vtxbuf_local[2].rgba[2] = 1;
+	vtxbuf_local[2].rgba[3] = 1;
 
 	//uint64_t vtxbuf_sz = 100;
 
@@ -340,8 +397,9 @@ int main(int argc, char** argv)
 	}));
 	assert(bind_group_layout);
 
-	WGPUShaderModuleDescriptor shaderSource = load_wgsl(my_shader);
+	WGPUShaderModuleDescriptor shaderSource = load_wgsl(my_shader2);
 	WGPUShaderModule shader = wgpuDeviceCreateShaderModule(device, &shaderSource);
+	assert(shader);
 
 	WGPUPipelineLayout pipeline_layout = wgpuDeviceCreatePipelineLayout(
 		device,
@@ -524,10 +582,10 @@ int main(int argc, char** argv)
 					.loadOp = WGPULoadOp_Clear,
 					.storeOp = WGPUStoreOp_Store,
 					.clearColor = (WGPUColor){
-						.r = (iteration & 32) ? 1.0 : 0.0,
-						.g = 1.0,
-						.b = 1.0,
-						.a = 1.0,
+						.r = (iteration & 32) ? 0.1 : 0.0,
+						.g = 0.0,
+						.b = 0.0,
+						.a = 0.0,
 					},
 				},
 				.colorAttachmentCount = 1,
