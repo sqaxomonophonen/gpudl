@@ -5,7 +5,7 @@
 
 #include <X11/Xlib.h>
 
-#include "wgpu.h"
+#include "webgpux.h"
 
 const char* my_shader =
 "[[stage(vertex)]]\n"
@@ -329,15 +329,14 @@ int main(int argc, char** argv)
 	WGPUBuffer vtxbuf = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor){
 		.usage = WGPUBufferUsage_Vertex | WGPUBufferUsage_MapWrite,
 		.size = sizeof(vtxbuf_local),
-		.mappedAtCreation = 1,
 	});
 	assert(vtxbuf);
 	{
-		void* dst = wgpuBufferGetMappedRange(vtxbuf, 0, sizeof(vtxbuf_local));
+		void* dst = wgpuBufferMap(device, vtxbuf, WGPUMapMode_Write, 0, sizeof(vtxbuf_local));
 		assert(dst);
 		memcpy(dst, vtxbuf_local, sizeof(vtxbuf_local));
+		wgpuBufferUnmap(vtxbuf);
 	}
-	wgpuBufferUnmap(vtxbuf); // XXX try without
 
 	struct unibuf {
 		float xyzw[4];
@@ -347,15 +346,16 @@ int main(int argc, char** argv)
 	WGPUBuffer unibuf = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor){
 		.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_MapWrite,
 		.size = sizeof(unibuf_local),
-		.mappedAtCreation = 1,
 	});
 	assert(unibuf);
+	#if 0
 	{
 		void* dst = wgpuBufferGetMappedRange(unibuf, 0, sizeof(unibuf_local));
 		assert(dst);
 		memcpy(dst, &unibuf_local, sizeof(unibuf_local));
 	}
 	wgpuBufferUnmap(unibuf); // XXX try without
+	#endif
 
 
 	WGPUBindGroupLayout bind_group_layout = wgpuDeviceCreateBindGroupLayout(device, &((WGPUBindGroupLayoutDescriptor){
