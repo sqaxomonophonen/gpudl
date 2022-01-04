@@ -42,7 +42,7 @@ const char* my_shader2 =
 "	[[location(0)]] xyzw: vec4<f32>,\n"
 "	[[location(1)]] rgba: vec4<f32>,\n"
 ") -> VertexOutput {\n"
-"	let m: f32 = 10.0;\n"
+"	let m: f32 = 7.0;\n"
 "	let a: f32 = f32(uniforms.frame) * 0.01;\n"
 "	let ud: f32 = uniforms.distort;\n"
 "	let distort = vec2<f32>(ud*sin(m*xyzw.x + a), ud*cos(m*xyzw.y + a));\n"
@@ -53,9 +53,12 @@ const char* my_shader2 =
 "	return out;\n"
 "}\n"
 "\n"
+"[[group(0), binding(1)]]\n"
+"var tex: texture_2d<u32>;\n"
 "[[stage(fragment)]]\n"
 "fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {\n"
-"	return in.rgba * uniforms.alpha;\n"
+"	let dim = vec2<f32>(textureDimensions(tex));\n"
+"	return in.rgba * uniforms.alpha * (1.0/256.0) * f32(textureLoad(tex, vec2<i32>(in.rgba.xy * dim), 0).x);\n"
 "}\n";
 
 
@@ -339,8 +342,59 @@ int main(int argc, char** argv)
 	});
 	assert(unibuf);
 
+	const int texture_width = 256;
+	const int texture_height = 256;
+	const size_t texture_sz = texture_width * texture_height;
+
+	WGPUTexture texture = wgpuDeviceCreateTexture(device, &(WGPUTextureDescriptor) {
+		.usage = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst,
+		.dimension = WGPUTextureDimension_2D,
+		.size = (WGPUExtent3D){
+			.width = 256,
+			.height = 256,
+			.depthOrArrayLayers = 1,
+		},
+		.mipLevelCount = 1,
+		.sampleCount = 1,
+		.format = WGPUTextureFormat_R8Uint,
+	});
+	assert(texture);
+
+	WGPUTextureView texture_view = wgpuTextureCreateView(texture, &(WGPUTextureViewDescriptor) {});
+	assert(texture_view);
+
+	uint8_t* texture_data = calloc(texture_sz, 1);
+
+	uint8_t* tp = texture_data;
+	for (int y = 0; y < texture_height; y++) {
+		for (int x = 0; x < texture_width; x++) {
+			*(tp++) = (((x>>4)&1) ^ ((y>>4)&1)) ? 255 : 0;
+		}
+	}
+
+	wgpuQueueWriteTexture(
+		queue,
+		&(WGPUImageCopyTexture) {
+			.texture = texture,
+		},
+		texture_data,
+		texture_sz,
+		&(WGPUTextureDataLayout) {
+			.offset = 0,
+			.bytesPerRow = texture_width,
+			.rowsPerImage = texture_height,
+		},
+		&(WGPUExtent3D) {
+			.width = texture_width,
+			.height = texture_height,
+			.depthOrArrayLayers = 1,
+		}
+	);
+
+	//wgpuDeviceCreateSampler
+
 	WGPUBindGroupLayout bind_group_layout = wgpuDeviceCreateBindGroupLayout(device, &((WGPUBindGroupLayoutDescriptor){
-		.entryCount = 1,
+		.entryCount = 2,
 		.entries = (WGPUBindGroupLayoutEntry[]){
 			(WGPUBindGroupLayoutEntry){
 				.binding = 0,
@@ -352,28 +406,15 @@ int main(int argc, char** argv)
 					.minBindingSize = sizeof(struct Uniforms),
 				},
 			},
-			#if 0
 			(WGPUBindGroupLayoutEntry){
 				.binding = 1,
 				.visibility = WGPUShaderStage_Fragment,
-				.texture = (WGPUTextureBindingLayout){
+				.texture = (WGPUTextureBindingLayout) {
+					.sampleType = WGPUTextureSampleType_Uint,
+					.viewDimension = WGPUTextureViewDimension_2D,
 					.multisampled = false,
-					.sampleType = WGPUTextureSampleType_Uint, // WGPUTextureSampleType_Depth
-					.viewDimension = WGPUTextureViewDimension_2D,
 				},
-				#if 0
-				.sampler = (WGPUSamplerBindingLayout){
-					.type = WGPUSamplerBindingType_NonFiltering,
-				},
-				.storageTexture = (WGPUStorageTextureBindingLayout){
-					.access = WGPUStorageTextureAccess_WriteOnly,
-					.format = WGPUTextureFormat_R32Float,
-					.viewDimension = WGPUTextureViewDimension_2D,
-				},
-				#endif
-				// TODO
 			},
-			#endif
 		},
 	}));
 	assert(bind_group_layout);
@@ -394,24 +435,21 @@ int main(int argc, char** argv)
 
 	WGPUBindGroup bind_group = wgpuDeviceCreateBindGroup(device, &(WGPUBindGroupDescriptor){
 		.layout = bind_group_layout,
-		.entryCount = 1,
+		.entryCount = 2,
 		.entries = (WGPUBindGroupEntry[]){
 			(WGPUBindGroupEntry){
 				.binding = 0,
 				.buffer = unibuf,
 				.offset = 0,
 				.size = sizeof(struct Uniforms),
-			}, 
-			#if 0
+			},
 			(WGPUBindGroupEntry){
 				.binding = 1,
-				.buffer = unibuf,
-				.offset = 0,
-			},
-			#endif
+				.textureView = texture_view,
+			}, 
 		},
 	});
-	
+
 	WGPUTextureFormat swapChainFormat = wgpuSurfaceGetPreferredFormat(surface, adapter);
 
 	WGPURenderPipeline pipeline = wgpuDeviceCreateRenderPipeline(
