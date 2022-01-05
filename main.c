@@ -143,6 +143,40 @@ struct Uniforms {
 	int frame;
 };
 
+static void write_vertices(int iteration, int n_triangles, struct Vertex* vertices)
+{
+	struct Vertex* p = vertices;
+	for (int i = 0; i < n_triangles; i++) {
+		float x = -1.0f + 2.0f * ((float)i / (float)(n_triangles-1));
+		float y = -1.0f + 2.0f * ((float)i / (float)(n_triangles-1));
+
+		float a = (float)i + ((float)iteration) * 0.01f;
+		const float a120 = (M_PI/3)*2;
+		const float a240 = a120 * 2;
+
+		const float r = 0.05f;
+		float dx0 = r * sinf(a);
+		float dy0 = r * cosf(a);
+		float dx1 = r * sinf(a + a120);
+		float dy1 = r * cosf(a + a120);
+		float dx2 = r * sinf(a + a240);
+		float dy2 = r * cosf(a + a240);
+
+		*(p++) = (struct Vertex){
+			.xyzw = { x+dx0, y+dy0 },
+			.rgba = {1,0,0,1},
+		};
+		*(p++) = (struct Vertex){
+			.xyzw = { x+dx1, y+dy1 },
+			.rgba = {0,1,0,1},
+		};
+		*(p++) = (struct Vertex){
+			.xyzw = { x+dx2, y+dy2 },
+			.rgba = {0,0,1,1},
+		};
+	}
+}
+
 int main(int argc, char** argv)
 {
 	//wgpuSetLogLevel(WGPULogLevel_Trace);
@@ -314,7 +348,7 @@ int main(int argc, char** argv)
 	const size_t vtxbuf_sz = n_vertices * sizeof(struct Vertex);
 
 	WGPUBuffer vtxbuf = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor){
-		.usage = WGPUBufferUsage_Vertex | WGPUBufferUsage_MapWrite,
+		.usage = WGPUBufferUsage_Vertex | WGPUBufferUsage_MapWrite | WGPUBufferUsage_CopyDst,
 		.size = vtxbuf_sz,
 	});
 	assert(vtxbuf);
@@ -587,41 +621,15 @@ int main(int argc, char** argv)
 		new_swap_chain = 0;
 
 		{
+			#if 1
 			struct Vertex* vertices = wgpuBufferMap(device, vtxbuf, WGPUMapMode_Write, 0, vtxbuf_sz);
-
-			struct Vertex* p = vertices;
-			for (int i = 0; i < n_triangles; i++) {
-
-				float x = -1.0f + 2.0f * ((float)i / (float)(n_triangles-1));
-				float y = -1.0f + 2.0f * ((float)i / (float)(n_triangles-1));
-
-				float a = (float)i + ((float)iteration) * 0.01f;
-				const float a120 = (M_PI/3)*2;
-				const float a240 = a120 * 2;
-
-				const float r = 0.05f;
-				float dx0 = r * sinf(a);
-				float dy0 = r * cosf(a);
-				float dx1 = r * sinf(a + a120);
-				float dy1 = r * cosf(a + a120);
-				float dx2 = r * sinf(a + a240);
-				float dy2 = r * cosf(a + a240);
-
-				*(p++) = (struct Vertex){
-					.xyzw = { x+dx0, y+dy0 },
-					.rgba = {1,0,0,1},
-				};
-				*(p++) = (struct Vertex){
-					.xyzw = { x+dx1, y+dy1 },
-					.rgba = {0,1,0,1},
-				};
-				*(p++) = (struct Vertex){
-					.xyzw = { x+dx2, y+dy2 },
-					.rgba = {0,0,1,1},
-				};
-			}
-
+			write_vertices(iteration, n_triangles, vertices);
 			wgpuBufferUnmap(vtxbuf);
+			#else
+			struct Vertex vs[n_vertices];
+			write_vertices(iteration, n_triangles, vs);
+			wgpuQueueWriteBuffer(queue, vtxbuf, 0, vs, vtxbuf_sz);
+			#endif
 		}
 
 		{
