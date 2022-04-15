@@ -72,7 +72,30 @@ GPUDL_WGPU_PROCS
 enum gpudl_event_type {
 	GPUDL_MOTION = 1,
 	GPUDL_BUTTON,
+	GPUDL_KEY,
+	GPUDL_CLOSE,
 };
+
+enum gpudl_keycode {
+	GK_UNKNOWN = -1,
+
+	GK_SPECIAL_BEGIN = 256,
+
+	GK_INSERT, GK_DELETE, GK_HOME, GK_END,
+	GK_LEFT, GK_UP, GK_RIGHT, GK_DOWN,
+	GK_PGUP, GK_PGDN,
+	GK_PRINT,
+
+	GK_F1, GK_F2, GK_F3, GK_F4, GK_F5, GK_F6, GK_F7, GK_F8, GK_F9, GK_F10, GK_F11, GK_F12,
+
+	GK_LSHIFT, GK_RSHIFT,
+	GK_LCTRL,  GK_RCTRL,
+	GK_LALT,   GK_RALT,
+	GK_LSUPER, GK_RSUPER,
+
+	GK_SPECIAL_END,
+};
+
 
 struct gpudl_event_motion {
 	float x;
@@ -86,12 +109,18 @@ struct gpudl_event_button {
 	float y;
 };
 
+struct gpudl_event_key {
+	int pressed;
+	int code;
+};
+
 struct gpudl_event {
 	int window_id;
 	enum gpudl_event_type type;
 	union {
 		struct gpudl_event_motion motion;
 		struct gpudl_event_button button;
+		struct gpudl_event_key    key;
 	};
 };
 
@@ -116,6 +145,7 @@ void gpudl_render_end();
 #include <dlfcn.h>
 
 #include <X11/Xlib.h>
+#include <X11/keysym.h>
 
 #define GPUDL__MAX_WINDOWS (256)
 
@@ -514,14 +544,68 @@ int gpudl_poll_event(struct gpudl_event* e)
 			e->motion.y = xe.xmotion.y;
 			return 1;
 		case KeyPress:
-		case KeyRelease:
-			printf("EV-TODO: key\n");
-			break;
+		case KeyRelease: {
+			e->type = GPUDL_KEY;
+			e->key.pressed = (xe.type == KeyPress);
+			KeySym sym = XLookupKeysym(&xe.xkey, 0);
+			int code = GK_UNKNOWN;
+			if (' ' <= sym && sym <= '~') {
+				// simple 1:1 key<->ascii mapping
+				code = sym;
+			} else {
+				switch (sym) {
+				// some convenient ASCII mappings (like in SDL2)
+				case XK_Escape:    code = '\033'; break;
+				case XK_Tab:       code = '\t';   break;
+				case XK_BackSpace: code = '\b';   break;
+				case XK_Return:    code = '\r';   break;
+
+				case XK_Insert:       code = GK_INSERT;   break;
+				case XK_Delete:       code = GK_DELETE;   break;
+				case XK_Home:         code = GK_HOME;     break;
+				case XK_End:          code = GK_END;      break;
+				case XK_Left:         code = GK_LEFT;     break;
+				case XK_Up:           code = GK_UP;       break;
+				case XK_Right:        code = GK_RIGHT;    break;
+				case XK_Down:         code = GK_DOWN;     break;
+				case XK_Page_Up:      code = GK_PGUP;     break;
+				case XK_Page_Down:    code = GK_PGDN;     break;
+
+				case XK_F1:           code = GK_F1;   break;
+				case XK_F2:           code = GK_F2;   break;
+				case XK_F3:           code = GK_F3;   break;
+				case XK_F4:           code = GK_F4;   break;
+				case XK_F5:           code = GK_F5;   break;
+				case XK_F6:           code = GK_F6;   break;
+				case XK_F7:           code = GK_F7;   break;
+				case XK_F8:           code = GK_F8;   break;
+				case XK_F9:           code = GK_F9;   break;
+				case XK_F10:          code = GK_F10;  break;
+				case XK_F11:          code = GK_F11;  break;
+				case XK_F12:          code = GK_F12;  break;
+
+				case XK_Shift_L:      code = GK_LSHIFT;  break;
+				case XK_Shift_R:      code = GK_RSHIFT;  break;
+				case XK_Control_L:    code = GK_LCTRL;   break;
+				case XK_Control_R:    code = GK_RCTRL;   break;
+				case XK_Alt_L:        code = GK_LALT;    break;
+				case XK_Alt_R:        code = GK_RALT;    break;
+				case XK_Super_L:      code = GK_LSUPER;  break;
+				case XK_Super_R:      code = GK_RSUPER;  break;
+
+				case XK_Print:        code = GK_PRINT;   break;
+
+				default:              code = GK_UNKNOWN;  break;
+				}
+			}
+			e->key.code = code;
+			return 1;
+			} break;
 		case ClientMessage: {
 			const Atom protocol = xe.xclient.data.l[0];
 			if (protocol == gpudl__runtime.x11_WM_DELETE_WINDOW) {
-				//exiting = 1;
-				printf("EV-TODO: close window\n");
+				e->type = GPUDL_CLOSE;
+				return 1;
 			}
 			break;
 		}

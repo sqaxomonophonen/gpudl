@@ -364,10 +364,14 @@ int main(int argc, char** argv)
 	int iteration = 0;
 	int exiting = 0;
 
-	while (!exiting) {
+	while (!exiting && arrlen(windows) > 0) {
 		struct gpudl_event e;
 		while (gpudl_poll_event(&e)) {
+			int do_close_window_id = 0;
 			switch (e.type) {
+			case GPUDL_CLOSE:
+				do_close_window_id = e.window_id;
+				break;
 			case GPUDL_MOTION:
 				for (int i = 0; i < arrlen(windows); i++) {
 					struct window* window = &windows[i];
@@ -385,16 +389,27 @@ int main(int argc, char** argv)
 							.id = gpudl_window_open("gpudl/n"),
 						}));
 					} else if (e.button.which == 3) {
-						for (int i = 0; i < arrlen(windows); i++) {
-							if (windows[i].id == e.window_id) {
-								gpudl_window_close(e.window_id);
-								arrdel(windows, i);
-								break;
-							}
-						}
+						do_close_window_id = e.window_id;
 					}
 				}
 				break;
+			case GPUDL_KEY:
+				printf("KEY code=%d pressed=%d\n", e.key.code, e.key.pressed);
+				if (e.key.code == '\033' && e.key.pressed) {
+					do_close_window_id = e.window_id;
+				}
+				break;
+			}
+
+			if (do_close_window_id) {
+				for (int i = 0; i < arrlen(windows); i++) {
+					struct window* w = &windows[i];
+					if (w->id == do_close_window_id) {
+						gpudl_window_close(w->id);
+						arrdel(windows, i);
+						break;
+					}
+				}
 			}
 		}
 
