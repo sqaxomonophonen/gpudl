@@ -183,6 +183,9 @@ struct gpudl__runtime {
 	struct gpudl__window windows[GPUDL__MAX_WINDOWS];
 
 	int rendering_window_id;
+	WGPUTextureView rendering_swap_chain_texture_view;
+
+	void (*proc_wgpuTextureViewDrop)(WGPUTextureView textureView);
 
 	Display* x11_display;
 	int      x11_screen;
@@ -207,13 +210,17 @@ void gpudl_init()
 
 	{
 		// XXX should allow different .so locations?
-		gpudl__runtime.dh = dlopen("./libwgpu_native.so", RTLD_NOW | RTLD_GLOBAL);
+		void* dh = gpudl__runtime.dh = dlopen("./libwgpu_native.so", RTLD_NOW | RTLD_GLOBAL);
 		assert(gpudl__runtime.dh != NULL && "could not load ./libwgpu_native.so");
 		#define GPUDL_WGPU_PROC(NAME) \
-			wgpu##NAME = dlsym(gpudl__runtime.dh, "wgpu" #NAME); \
+			wgpu##NAME = dlsym(dh, "wgpu" #NAME); \
 			if (wgpu##NAME == NULL) fprintf(stderr, "WARNING: symbol wgpu%s not found\n", #NAME);
 		GPUDL_WGPU_PROCS
 		#undef GPUDL_WGPU_PROC
+
+		// some auxiliary stuff
+		gpudl__runtime.proc_wgpuTextureViewDrop = dlsym(dh, "wgpuTextureViewDrop");
+		assert((gpudl__runtime.proc_wgpuTextureViewDrop != NULL) && "wgpuTextureViewDrop() not found");
 	}
 
 	gpudl__runtime.wgpu_instance = wgpuCreateInstance(&(WGPUInstanceDescriptor){});
@@ -636,6 +643,7 @@ WGPUTextureView gpudl_render_begin(int window_id)
 	}
 	WGPUTextureView view = wgpuSwapChainGetCurrentTextureView(win->wgpu_swap_chain);
 	if (view != NULL) {
+		gpudl__runtime.rendering_swap_chain_texture_view = view;
 		gpudl__runtime.rendering_window_id = win->id;
 		return view;
 	} else {
@@ -649,6 +657,8 @@ void gpudl_render_end()
 	struct gpudl__window* win = gpudl__get_window(gpudl__runtime.rendering_window_id);
 	wgpuSwapChainPresent(win->wgpu_swap_chain);
 	gpudl__runtime.rendering_window_id = 0;
+	gpudl__runtime.proc_wgpuTextureViewDrop(gpudl__runtime.rendering_swap_chain_texture_view);
+	gpudl__runtime.rendering_swap_chain_texture_view = NULL;
 }
 
 #if 0
