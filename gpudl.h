@@ -76,6 +76,8 @@ enum gpudl_event_type {
 	GPUDL_CLOSE,
 	GPUDL_ENTER,
 	GPUDL_LEAVE,
+	GPUDL_FOCUS,
+	GPUDL_UNFOCUS,
 };
 
 enum gpudl_keycode {
@@ -528,6 +530,12 @@ int gpudl_poll_event(struct gpudl_event* e)
 			return 1;
 		case LeaveNotify:
 			e->type = GPUDL_LEAVE;
+			return 1;
+		case FocusIn:
+			e->type = GPUDL_FOCUS;
+			return 1;
+		case FocusOut:
+			e->type = GPUDL_UNFOCUS;
 			return 1;
 		case ButtonPress:
 		case ButtonRelease:

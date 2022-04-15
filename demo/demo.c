@@ -405,6 +405,12 @@ int main(int argc, char** argv)
 			case GPUDL_LEAVE:
 				printf("LEAVE\n");
 				break;
+			case GPUDL_FOCUS:
+				printf("+FOCUS\n");
+				break;
+			case GPUDL_UNFOCUS:
+				printf("-FOCUS\n");
+				break;
 			}
 
 			if (do_close_window_id) {
