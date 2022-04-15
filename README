@@ -1,0 +1,9 @@
+webgpu-native windowing in a single-header library
+ - very much work in progress
+ - assumes wgpu-native (https://github.com/gfx-rs/wgpu-native); Dawn is not
+   currently considered because Google haven't released any binaries (HINT:
+   they never did for ANGLE), and their custom python2 build tools... the
+   horror... the horror...
+ - only X11/Linux currently
+
+see demo/

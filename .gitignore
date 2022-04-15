@@ -4,3 +4,4 @@ libwgpu_native.so
 *.o
 main
 .*swp
+tmp/
