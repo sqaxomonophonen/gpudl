@@ -4,6 +4,15 @@
 #define WGPU_SKIP_DECLARATIONS
 #include "webgpu.h"
 
+
+// XXX these are currently non-standard APIs defined by wgpu-native only.
+// webgpu.h is somewhat useless without the ability to free temporaary
+// resources, but the webgpu-native header team haven't come to a resolution
+// the past couple of years.
+// see also: https://github.com/webgpu-native/webgpu-headers/issues/9
+typedef void (*WGPUProcTextureDrop)(WGPUTexture);
+typedef void (*WGPUProcTextureViewDrop)(WGPUTextureView);
+
 // procs defined in libwgpu_native.so; Dawn is currently not considered
 #define GPUDL_WGPU_PROCS \
 	GPUDL_WGPU_PROC(CreateInstance) \
@@ -63,7 +72,9 @@
 	GPUDL_WGPU_PROC(SwapChainGetCurrentTextureView) \
 	GPUDL_WGPU_PROC(SwapChainPresent) \
 	GPUDL_WGPU_PROC(TextureCreateView) \
-	GPUDL_WGPU_PROC(TextureDestroy)
+	GPUDL_WGPU_PROC(TextureDestroy) \
+	GPUDL_WGPU_PROC(TextureDrop) \
+	GPUDL_WGPU_PROC(TextureViewDrop)
 
 #define GPUDL_WGPU_PROC(NAME) extern WGPUProc##NAME wgpu##NAME;
 GPUDL_WGPU_PROCS
@@ -185,8 +196,6 @@ struct gpudl__runtime {
 	int rendering_window_id;
 	WGPUTextureView rendering_swap_chain_texture_view;
 
-	void (*proc_wgpuTextureViewDrop)(WGPUTextureView textureView);
-
 	Display* x11_display;
 	int      x11_screen;
 	Window   x11_root_window;
@@ -217,10 +226,6 @@ void gpudl_init()
 			if (wgpu##NAME == NULL) fprintf(stderr, "WARNING: symbol wgpu%s not found\n", #NAME);
 		GPUDL_WGPU_PROCS
 		#undef GPUDL_WGPU_PROC
-
-		// some auxiliary stuff
-		gpudl__runtime.proc_wgpuTextureViewDrop = dlsym(dh, "wgpuTextureViewDrop");
-		assert((gpudl__runtime.proc_wgpuTextureViewDrop != NULL) && "wgpuTextureViewDrop() not found");
 	}
 
 	gpudl__runtime.wgpu_instance = wgpuCreateInstance(&(WGPUInstanceDescriptor){});
@@ -530,6 +535,7 @@ int gpudl_poll_event(struct gpudl_event* e)
 					}
 				);
 				assert(win->wgpu_swap_chain);
+				assert((win->wgpu_surface == (WGPUSurface)win->wgpu_swap_chain) && "wgpu-native assumption: wgpuDeviceCreateSwapChain() should return the passed surface; otherwise this code must free the previous swap chain?");
 			}
 			break;
 		case EnterNotify:
@@ -657,7 +663,7 @@ void gpudl_render_end()
 	struct gpudl__window* win = gpudl__get_window(gpudl__runtime.rendering_window_id);
 	wgpuSwapChainPresent(win->wgpu_swap_chain);
 	gpudl__runtime.rendering_window_id = 0;
-	gpudl__runtime.proc_wgpuTextureViewDrop(gpudl__runtime.rendering_swap_chain_texture_view);
+	wgpuTextureViewDrop(gpudl__runtime.rendering_swap_chain_texture_view);
 	gpudl__runtime.rendering_swap_chain_texture_view = NULL;
 }
 
