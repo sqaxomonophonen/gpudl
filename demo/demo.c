@@ -407,7 +407,6 @@ int main(int argc, char** argv)
 				continue;
 			}
 
-
 			struct Vertex vs[n_vertices];
 			write_vertices(iteration, n_triangles, vs);
 			wgpuQueueWriteBuffer(queue, vtxbuf, 0, vs, vtxbuf_sz);

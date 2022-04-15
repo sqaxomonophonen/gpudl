@@ -534,16 +534,24 @@ int gpudl_poll_event(struct gpudl_event* e)
 
 WGPUTextureView gpudl_render_begin(int window_id)
 {
+	assert((window_id > 0) && "invalid window id");
 	assert((gpudl__runtime.rendering_window_id == 0) && "already rendering a window");
 	struct gpudl__window* win = gpudl__get_window(window_id);
-	if (!win->wgpu_swap_chain) return NULL;
-	gpudl__runtime.rendering_window_id = win->id;
-	return wgpuSwapChainGetCurrentTextureView(win->wgpu_swap_chain);
+	if (!win->wgpu_swap_chain) {
+		return NULL;
+	}
+	WGPUTextureView view = wgpuSwapChainGetCurrentTextureView(win->wgpu_swap_chain);
+	if (view != NULL) {
+		gpudl__runtime.rendering_window_id = win->id;
+		return view;
+	} else {
+		return NULL;
+	}
 }
 
 void gpudl_render_end()
 {
-	assert(gpudl__runtime.rendering_window_id > 0);
+	assert((gpudl__runtime.rendering_window_id > 0) && "not rendering a window");
 	struct gpudl__window* win = gpudl__get_window(gpudl__runtime.rendering_window_id);
 	wgpuSwapChainPresent(win->wgpu_swap_chain);
 	gpudl__runtime.rendering_window_id = 0;
