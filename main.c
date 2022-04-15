@@ -245,7 +245,7 @@ int main(int argc, char** argv)
 			},
 	});
 
-	WGPUInstance instance = NULL; // XXX no wgpuCreateInstance() yet
+	WGPUInstance instance = wgpuCreateInstance(&(WGPUInstanceDescriptor){});
 
 	WGPUAdapter adapter = NULL;
 	wgpuInstanceRequestAdapter(
