@@ -8,39 +8,39 @@
 
 #include "webgpux.h"
 
+#if 0
 const char* my_shader =
-"[[stage(vertex)]]\n"
-"fn vs_main([[builtin(vertex_index)]] in_vertex_index: u32) -> [[builtin(position)]] vec4<f32> {\n"
+"@stage(vertex)\n"
+"fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4<f32> {\n"
 "	let x = f32(i32(in_vertex_index) - 1) * 0.5;\n"
 "	let y = f32(i32(in_vertex_index & 1u) * 2 - 1);\n"
 "	return vec4<f32>(x, y, 0.0, 1.0);\n"
 "}\n"
 "\n"
-"[[stage(fragment)]]\n"
-"fn fs_main() -> [[location(0)]] vec4<f32> {\n"
+"@stage(fragment)\n"
+"fn fs_main() -> @location(0) vec4<f32> {\n"
 "	return vec4<f32>(1.0, 0.0, 1.0, 1.0);\n"
 "}\n";
-
-
+#endif
 
 const char* my_shader2 =
 "struct VertexOutput {\n"
-	"[[location(0)]] rgba: vec4<f32>;\n"
-	"[[builtin(position)]] position: vec4<f32>;\n"
+	"@location(0) rgba: vec4<f32>,\n"
+	"@builtin(position) position: vec4<f32>,\n"
 "};\n"
 "\n"
 "struct Uniforms {\n"
-"	distort: f32;\n"
-"	alpha: f32;\n"
-"	frame: u32;\n"
+"	distort: f32,\n"
+"	alpha: f32,\n"
+"	frame: u32,\n"
 "};\n"
-"[[group(0), binding(0)]]\n"
+"@group(0) @binding(0)\n"
 "var<uniform> uniforms: Uniforms;\n"
 "\n"
-"[[stage(vertex)]]\n"
+"@stage(vertex)\n"
 "fn vs_main(\n"
-"	[[location(0)]] xyzw: vec4<f32>,\n"
-"	[[location(1)]] rgba: vec4<f32>,\n"
+"	@location(0) xyzw: vec4<f32>,\n"
+"	@location(1) rgba: vec4<f32>,\n"
 ") -> VertexOutput {\n"
 "	let m: f32 = 7.0;\n"
 "	let a: f32 = f32(uniforms.frame) * 0.01;\n"
@@ -53,10 +53,10 @@ const char* my_shader2 =
 "	return out;\n"
 "}\n"
 "\n"
-"[[group(0), binding(1)]]\n"
+"@group(0) @binding(1)\n"
 "var tex: texture_2d<u32>;\n"
-"[[stage(fragment)]]\n"
-"fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {\n"
+"@stage(fragment)\n"
+"fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {\n"
 "	let dim = vec2<f32>(textureDimensions(tex));\n"
 "	return in.rgba * uniforms.alpha * (1.0/256.0) * f32(textureLoad(tex, vec2<i32>(in.rgba.xy * dim), 0).x);\n"
 "}\n";
@@ -235,10 +235,10 @@ int main(int argc, char** argv)
 		NULL,
 		&(WGPUSurfaceDescriptor){
 			.label = NULL,
-			.nextInChain = (const WGPUChainedStruct *)&(WGPUSurfaceDescriptorFromXlib){
+			.nextInChain = (const WGPUChainedStruct *)&(WGPUSurfaceDescriptorFromXlibWindow){
 				.chain = (WGPUChainedStruct){
 					.next = NULL,
-					.sType = WGPUSType_SurfaceDescriptorFromXlib,
+					.sType = WGPUSType_SurfaceDescriptorFromXlibWindow,
 				},
 				.display = display,
 				.window = window,
@@ -621,11 +621,12 @@ int main(int argc, char** argv)
 		new_swap_chain = 0;
 
 		{
-			#if 1
+			#if 0
 			struct Vertex* vertices = wgpuBufferMap(device, vtxbuf, WGPUMapMode_Write, 0, vtxbuf_sz);
 			write_vertices(iteration, n_triangles, vertices);
 			wgpuBufferUnmap(vtxbuf);
 			#else
+			// everybody seems to recommend queue.write_buffer() over buffer.map()?
 			struct Vertex vs[n_vertices];
 			write_vertices(iteration, n_triangles, vs);
 			wgpuQueueWriteBuffer(queue, vtxbuf, 0, vs, vtxbuf_sz);
@@ -654,7 +655,7 @@ int main(int argc, char** argv)
 					.resolveTarget = 0,
 					.loadOp = WGPULoadOp_Clear,
 					.storeOp = WGPUStoreOp_Store,
-					.clearColor = (WGPUColor){.b=0.1},
+					.clearValue = (WGPUColor){.b=0.1},
 				},
 				.depthStencilAttachment = NULL,
 			}
@@ -664,7 +665,7 @@ int main(int argc, char** argv)
 		wgpuRenderPassEncoderSetBindGroup(renderPass, 0, bind_group, 0, 0);
 		wgpuRenderPassEncoderSetVertexBuffer(renderPass, 0, vtxbuf, 0, vtxbuf_sz);
 		wgpuRenderPassEncoderDraw(renderPass, n_vertices, 1, 0, 0);
-		wgpuRenderPassEncoderEndPass(renderPass);
+		wgpuRenderPassEncoderEnd(renderPass);
 
 		WGPUCommandBuffer cmdBuffer = wgpuCommandEncoderFinish(
 			encoder,
