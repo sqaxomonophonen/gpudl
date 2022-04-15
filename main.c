@@ -348,13 +348,13 @@ int main(int argc, char** argv)
 	const size_t vtxbuf_sz = n_vertices * sizeof(struct Vertex);
 
 	WGPUBuffer vtxbuf = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor){
-		.usage = WGPUBufferUsage_Vertex | WGPUBufferUsage_MapWrite | WGPUBufferUsage_CopyDst,
+		.usage = WGPUBufferUsage_Vertex /*| WGPUBufferUsage_MapWrite*/ | WGPUBufferUsage_CopyDst,
 		.size = vtxbuf_sz,
 	});
 	assert(vtxbuf);
 
 	WGPUBuffer unibuf = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor){
-		.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_MapWrite,
+		.usage = WGPUBufferUsage_Uniform /*| WGPUBufferUsage_MapWrite*/ | WGPUBufferUsage_CopyDst,
 		.size = sizeof(struct Uniforms),
 	});
 	assert(unibuf);
@@ -620,6 +620,11 @@ int main(int argc, char** argv)
 		}
 		new_swap_chain = 0;
 
+		// write buffers
+		//   wgpuBufferMap()/Unmap() requires WGPUBufferUsage_MapWrite flag
+		//   wgpuQueueWriteBuffer() requires WGPUBufferUsage_CopyDst flag
+		// everybody seem to recommend wgpuQueueWriteBuffer()
+
 		{
 			#if 0
 			struct Vertex* vertices = wgpuBufferMap(device, vtxbuf, WGPUMapMode_Write, 0, vtxbuf_sz);
@@ -634,11 +639,20 @@ int main(int argc, char** argv)
 		}
 
 		{
+			#if 0
 			struct Uniforms* u = wgpuBufferMap(device, unibuf, WGPUMapMode_Write, 0, sizeof(*u));
 			u->frame = iteration;
 			u->distort = (((float)my / (float)height) - 0.5f) * 2.5f;
 			u->alpha = ((float)mx / (float)width) * 5.0f;
 			wgpuBufferUnmap(unibuf);
+			#else
+			struct Uniforms u = {
+				.frame = iteration,
+				.distort = (((float)my / (float)height) - 0.5f) * 2.5f,
+				.alpha = ((float)mx / (float)width) * 5.0f,
+			};
+			wgpuQueueWriteBuffer(queue, unibuf, 0, &u, sizeof u);
+			#endif
 		}
 
 		WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(
