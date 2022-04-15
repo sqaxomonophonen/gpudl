@@ -2,6 +2,6 @@ webgpu.h
 wgpu.h
 libwgpu_native.so
 *.o
-main
+demo
 .*swp
 tmp/
