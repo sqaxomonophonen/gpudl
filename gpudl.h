@@ -74,6 +74,8 @@ enum gpudl_event_type {
 	GPUDL_BUTTON,
 	GPUDL_KEY,
 	GPUDL_CLOSE,
+	GPUDL_ENTER,
+	GPUDL_LEAVE,
 };
 
 enum gpudl_keycode {
@@ -522,11 +524,11 @@ int gpudl_poll_event(struct gpudl_event* e)
 			}
 			break;
 		case EnterNotify:
-			printf("EV-TODO: enter\n");
-			break;
+			e->type = GPUDL_ENTER;
+			return 1;
 		case LeaveNotify:
-			printf("EV-TODO: leave\n");
-			break;
+			e->type = GPUDL_LEAVE;
+			return 1;
 		case ButtonPress:
 		case ButtonRelease:
 			e->type = GPUDL_BUTTON;
@@ -595,7 +597,7 @@ int gpudl_poll_event(struct gpudl_event* e)
 
 				case XK_Print:        code = GK_PRINT;   break;
 
-				default:              code = GK_UNKNOWN;  break;
+				default:              code = GK_UNKNOWN; break;
 				}
 			}
 			e->key.code = code;

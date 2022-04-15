@@ -399,6 +399,12 @@ int main(int argc, char** argv)
 					do_close_window_id = e.window_id;
 				}
 				break;
+			case GPUDL_ENTER:
+				printf("ENTER\n");
+				break;
+			case GPUDL_LEAVE:
+				printf("LEAVE\n");
+				break;
 			}
 
 			if (do_close_window_id) {
