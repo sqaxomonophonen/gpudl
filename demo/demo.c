@@ -104,15 +104,21 @@ static void write_vertices(int iteration, int n_triangles, struct Vertex* vertic
 	}
 }
 
+struct window {
+	int id;
+	int mx;
+	int my;
+};
+
 int main(int argc, char** argv)
 {
 	gpudl_init();
 	//wgpuCreateInstance(NULL);
 
-	int* windows = NULL;
-	int w0 = gpudl_window_open("gpudl/0");
-
-	arrput(windows, w0);
+	struct window* windows = NULL;
+	arrput(windows, ((struct window) {
+		.id = gpudl_window_open("gpudl/0"),
+	}));
 
 	WGPUAdapter adapter;
 	WGPUDevice device;
@@ -257,8 +263,8 @@ int main(int argc, char** argv)
 	}));
 	assert(bind_group_layout);
 
-	WGPUShaderModuleDescriptor shaderSource = load_wgsl(my_shader2);
-	WGPUShaderModule shader = wgpuDeviceCreateShaderModule(device, &shaderSource);
+	WGPUShaderModuleDescriptor shader_source = load_wgsl(my_shader2);
+	WGPUShaderModule shader = wgpuDeviceCreateShaderModule(device, &shader_source);
 	assert(shader);
 
 	WGPUPipelineLayout pipeline_layout = wgpuDeviceCreatePipelineLayout(
@@ -288,7 +294,7 @@ int main(int argc, char** argv)
 		},
 	});
 
-	WGPUTextureFormat swapChainFormat = wgpuSurfaceGetPreferredFormat(gpudl_window_get_surface(w0), adapter);
+	WGPUTextureFormat swapChainFormat = wgpuSurfaceGetPreferredFormat(gpudl_window_get_surface(windows[0].id), adapter);
 
 	WGPURenderPipeline pipeline = wgpuDeviceCreateRenderPipeline(
 		device,
@@ -357,25 +363,30 @@ int main(int argc, char** argv)
 
 	int iteration = 0;
 	int exiting = 0;
-	float mx=0, my=0;
 
 	while (!exiting) {
 		struct gpudl_event e;
 		while (gpudl_poll_event(&e)) {
 			switch (e.type) {
 			case GPUDL_MOTION:
-				mx = e.motion.x;
-				my = e.motion.y;
+				for (int i = 0; i < arrlen(windows); i++) {
+					struct window* window = &windows[i];
+					if (window->id == e.window_id) {
+						window->mx = e.motion.x;
+						window->my = e.motion.y;
+					}
+				}
 				break;
 			case GPUDL_BUTTON:
 				printf("btn %d %d\n", e.button.which, e.button.pressed);
 				if (e.button.pressed) {
 					if (e.button.which == 1) {
-						int wn = gpudl_window_open("gpudl/n");
-						arrput(windows, wn);
+						arrput(windows, ((struct window) {
+							.id = gpudl_window_open("gpudl/n"),
+						}));
 					} else if (e.button.which == 3) {
 						for (int i = 0; i < arrlen(windows); i++) {
-							if (windows[i] == e.window_id) {
+							if (windows[i].id == e.window_id) {
 								gpudl_window_close(e.window_id);
 								arrdel(windows, i);
 								break;
@@ -388,9 +399,9 @@ int main(int argc, char** argv)
 		}
 
 		for (int i = 0; i < arrlen(windows); i++) {
-			int window = windows[i];
+			struct window* window = &windows[i];
 
-			WGPUTextureView next_texture = gpudl_render_begin(window);
+			WGPUTextureView next_texture = gpudl_render_begin(window->id);
 			if (!next_texture) {
 				fprintf(stderr, "WARNING: no swap chain texture view\n");
 				continue;
@@ -402,12 +413,12 @@ int main(int argc, char** argv)
 			wgpuQueueWriteBuffer(queue, vtxbuf, 0, vs, vtxbuf_sz);
 
 			int width, height;
-			gpudl_window_get_size(w0, &width, &height);
+			gpudl_window_get_size(window->id, &width, &height);
 
 			struct Uniforms u = {
 				.frame = iteration,
-				.distort = (((float)my / (float)height) - 0.5f) * 2.5f,
-				.alpha = ((float)mx / (float)width) * 5.0f,
+				.distort = (((float)window->my / (float)height) - 0.5f) * 2.5f,
+				.alpha = ((float)window->mx / (float)width) * 5.0f,
 			};
 			wgpuQueueWriteBuffer(queue, unibuf, 0, &u, sizeof u);
 
