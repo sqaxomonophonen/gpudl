@@ -218,8 +218,23 @@ void gpudl_init()
 	if (gpudl__runtime.is_initialized) return;
 
 	{
-		// XXX should allow different .so locations?
-		void* dh = gpudl__runtime.dh = dlopen("./libwgpu_native.so", RTLD_NOW | RTLD_GLOBAL);
+		// XXX users should probably have some options in how their
+		// application finds the webgpu-native library?
+		static const char* try_paths[] = {
+			"./libwgpu_native.so", // <- name when doing `cargo build`
+			"./libwgpu.so",        // <- name in releases
+		};
+		void* dh = NULL;
+		for (int i = 0; i < (sizeof(try_paths) / sizeof(try_paths[0])); i++) {
+			dh = dlopen(try_paths[i], RTLD_NOW | RTLD_GLOBAL);
+			if (dh) break;
+		}
+		if (dh == NULL) {
+			fprintf(stderr, "Could not find webgpu-native dynamic library\n");
+			abort();
+		}
+
+		gpudl__runtime.dh = dh;
 		assert(gpudl__runtime.dh != NULL && "could not load ./libwgpu_native.so");
 		#define GPUDL_WGPU_PROC(NAME) \
 			wgpu##NAME = dlsym(dh, "wgpu" #NAME); \
