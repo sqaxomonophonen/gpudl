@@ -148,6 +148,7 @@ void gpudl_get_wgpu(WGPUInstance* instance, WGPUAdapter* adapter, WGPUDevice* de
 int gpudl_poll_event(struct gpudl_event* e);
 WGPUTextureView gpudl_render_begin(int window_id);
 void gpudl_render_end();
+WGPUTextureFormat gpudl_get_preferred_swap_chain_texture_format();
 
 #ifdef GPUDL_IMPLEMENTATION
 
@@ -172,7 +173,6 @@ struct gpudl__window {
 	int id;
 	WGPUSurface         wgpu_surface;
 	WGPUSwapChain       wgpu_swap_chain;
-	WGPUTextureFormat   wgpu_swap_chain_format;
 	Window x11_window;
 	int width;
 	int height;
@@ -189,6 +189,7 @@ struct gpudl__runtime {
 	WGPUDevice        wgpu_device;
 	WGPUQueue         wgpu_queue;
 	WGPUPresentMode   wgpu_present_mode;
+	WGPUTextureFormat wgpu_swap_chain_format;
 
 	int n_windows;
 	struct gpudl__window windows[GPUDL__MAX_WINDOWS];
@@ -386,8 +387,9 @@ static void gpudl__wgpu_post_init(struct gpudl__window* win)
 	gpudl__runtime.wgpu_queue = wgpuDeviceGetQueue(gpudl__runtime.wgpu_device);
 	assert(gpudl__runtime.wgpu_queue);
 
-	wgpuDeviceSetUncapturedErrorCallback(gpudl__runtime.wgpu_device, gpudl__wgpu_error_callback, NULL);
+	gpudl__runtime.wgpu_swap_chain_format = wgpuSurfaceGetPreferredFormat(win->wgpu_surface, gpudl__runtime.wgpu_adapter);
 
+	wgpuDeviceSetUncapturedErrorCallback(gpudl__runtime.wgpu_device, gpudl__wgpu_error_callback, NULL);
 }
 
 int gpudl_window_open(const char* title)
@@ -451,8 +453,6 @@ int gpudl_window_open(const char* title)
 	assert(win->wgpu_surface);
 
 	gpudl__wgpu_post_init(win);
-
-	win->wgpu_swap_chain_format = wgpuSurfaceGetPreferredFormat(win->wgpu_surface, gpudl__runtime.wgpu_adapter);
 
 	return win->id;
 }
@@ -543,7 +543,7 @@ int gpudl_poll_event(struct gpudl_event* e)
 					win->wgpu_surface,
 					&(WGPUSwapChainDescriptor){
 						.usage = WGPUTextureUsage_RenderAttachment,
-						.format = win->wgpu_swap_chain_format,
+						.format = gpudl__runtime.wgpu_swap_chain_format,
 						.width = win->width,
 						.height = win->height,
 						.presentMode = gpudl__runtime.wgpu_present_mode,
@@ -680,6 +680,11 @@ void gpudl_render_end()
 	gpudl__runtime.rendering_window_id = 0;
 	wgpuTextureViewDrop(gpudl__runtime.rendering_swap_chain_texture_view);
 	gpudl__runtime.rendering_swap_chain_texture_view = NULL;
+}
+
+WGPUTextureFormat gpudl_get_preferred_swap_chain_texture_format()
+{
+	return gpudl__runtime.wgpu_swap_chain_format;
 }
 
 #if 0
