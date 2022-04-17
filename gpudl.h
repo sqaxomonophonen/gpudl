@@ -25,6 +25,7 @@ typedef void (*WGPULogCallback)(WGPULogLevel level, const char *msg);
 // see also: https://github.com/webgpu-native/webgpu-headers/issues/9
 typedef void (*WGPUProcTextureDrop)(WGPUTexture);
 typedef void (*WGPUProcTextureViewDrop)(WGPUTextureView);
+typedef void (*WGPUProcBindGroupDrop)(WGPUBindGroup);
 typedef void (*WGPUProcSetLogCallback)(WGPULogCallback callback);
 typedef void (*WGPUProcSetLogLevel)(WGPULogLevel level);
 
@@ -91,6 +92,7 @@ typedef void (*WGPUProcSetLogLevel)(WGPULogLevel level);
 	GPUDL_WGPU_PROC(TextureDestroy) \
 	GPUDL_WGPU_PROC(TextureDrop) \
 	GPUDL_WGPU_PROC(TextureViewDrop) \
+	GPUDL_WGPU_PROC(BindGroupDrop) \
 	GPUDL_WGPU_PROC(SetLogCallback) \
 	GPUDL_WGPU_PROC(SetLogLevel)
 
