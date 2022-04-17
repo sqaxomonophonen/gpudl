@@ -5,6 +5,19 @@
 #include "webgpu.h"
 
 
+typedef enum WGPULogLevel {
+	WGPULogLevel_Off = 0x00000000,
+	WGPULogLevel_Error = 0x00000001,
+	WGPULogLevel_Warn = 0x00000002,
+	WGPULogLevel_Info = 0x00000003,
+	WGPULogLevel_Debug = 0x00000004,
+	WGPULogLevel_Trace = 0x00000005,
+	WGPULogLevel_Force32 = 0x7FFFFFFF
+} WGPULogLevel;
+
+
+typedef void (*WGPULogCallback)(WGPULogLevel level, const char *msg);
+
 // XXX these are currently non-standard APIs defined by wgpu-native only.
 // webgpu.h is somewhat useless without the ability to free temporaary
 // resources, but the webgpu-native header team haven't come to a resolution
@@ -12,6 +25,9 @@
 // see also: https://github.com/webgpu-native/webgpu-headers/issues/9
 typedef void (*WGPUProcTextureDrop)(WGPUTexture);
 typedef void (*WGPUProcTextureViewDrop)(WGPUTextureView);
+typedef void (*WGPUProcSetLogCallback)(WGPULogCallback callback);
+typedef void (*WGPUProcSetLogLevel)(WGPULogLevel level);
+
 
 // procs defined in libwgpu_native.so; Dawn is currently not considered
 #define GPUDL_WGPU_PROCS \
@@ -74,7 +90,9 @@ typedef void (*WGPUProcTextureViewDrop)(WGPUTextureView);
 	GPUDL_WGPU_PROC(TextureCreateView) \
 	GPUDL_WGPU_PROC(TextureDestroy) \
 	GPUDL_WGPU_PROC(TextureDrop) \
-	GPUDL_WGPU_PROC(TextureViewDrop)
+	GPUDL_WGPU_PROC(TextureViewDrop) \
+	GPUDL_WGPU_PROC(SetLogCallback) \
+	GPUDL_WGPU_PROC(SetLogLevel)
 
 #define GPUDL_WGPU_PROC(NAME) extern WGPUProc##NAME wgpu##NAME;
 GPUDL_WGPU_PROCS
