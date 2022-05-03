@@ -364,6 +364,23 @@ int main(int argc, char** argv)
 	int iteration = 0;
 	int exiting = 0;
 
+	int my_cursor = gpudl_make_bitmap_cursor(
+		"xxxxxxxxxxxxx\n"
+		"x...........x\n"
+		"x.xxxxxxxxx.x\n"
+		"x.x       x.x\n"
+		"x.x       x.x\n"
+		"x.x       x.x\n"
+		"x.x       x.x\n"
+		"x.x   ?   x.x\n"
+		"x.x       x.x\n"
+		"x.x       x.x\n"
+		"x.x       x.x\n"
+		"x.xxxxxxxxx.x\n"
+		"x...........x\n"
+		"xxxxxxxxxxxxx\n"
+	);
+
 	while (!exiting && arrlen(windows) > 0) {
 		struct gpudl_event e;
 		while (gpudl_poll_event(&e)) {
@@ -440,6 +457,14 @@ int main(int argc, char** argv)
 
 			int width, height;
 			gpudl_window_get_size(window->id, &width, &height);
+
+			if (window->my > height/2) {
+				gpudl_set_cursor(my_cursor);
+			} else if (window->mx < width/2) {
+				gpudl_set_cursor(GPUDL_CURSOR_DEFAULT);
+			} else {
+				gpudl_set_cursor(GPUDL_CURSOR_HAND);
+			}
 
 			struct Uniforms u = {
 				.frame = iteration,

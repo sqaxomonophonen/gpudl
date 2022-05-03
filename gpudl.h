@@ -111,6 +111,15 @@ enum gpudl_event_type {
 	GPUDL_UNFOCUS,
 };
 
+enum gpudl_system_cursor {
+	GPUDL_CURSOR_DEFAULT = 0,
+	GPUDL_CURSOR_HAND,
+	GPUDL_CURSOR_H_ARROW,
+	GPUDL_CURSOR_V_ARROW,
+	GPUDL_CURSOR_CROSS,
+	GPUDL_CURSOR_END
+};
+
 enum gpudl_keycode {
 	GK_UNKNOWN = -1,
 
@@ -168,8 +177,10 @@ void gpudl_window_close(int window_id);
 void gpudl_get_wgpu(WGPUInstance* instance, WGPUAdapter* adapter, WGPUDevice* device, WGPUQueue* queue);
 int gpudl_poll_event(struct gpudl_event* e);
 WGPUTextureView gpudl_render_begin(int window_id);
-void gpudl_render_end();
+void gpudl_render_end(void);
 WGPUTextureFormat gpudl_get_preferred_swap_chain_texture_format();
+void gpudl_set_cursor(int cursor);
+int gpudl_make_bitmap_cursor(const char* bitmap);
 
 #ifdef GPUDL_IMPLEMENTATION
 
@@ -183,6 +194,7 @@ WGPUTextureFormat gpudl_get_preferred_swap_chain_texture_format();
 
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
+#include <X11/cursorfont.h>
 
 #define GPUDL__MAX_WINDOWS (256)
 
@@ -197,6 +209,12 @@ struct gpudl__window {
 	Window x11_window;
 	int width;
 	int height;
+};
+
+#define GPUDL__MAX_CURSORS (256)
+struct gpudl__cursor {
+	int in_use;
+	Cursor cursor;
 };
 
 static struct gpudl__runtime {
@@ -227,6 +245,11 @@ static struct gpudl__runtime {
 	int      x11_depth;
 	Colormap x11_colormap;
 	Atom     x11_WM_DELETE_WINDOW;
+
+	XColor   x11_color_white;
+	XColor   x11_color_black;
+
+	struct gpudl__cursor cursors[GPUDL__MAX_CURSORS];
 } gpudl__runtime;
 
 
@@ -294,6 +317,29 @@ void gpudl_init()
 		gpudl__runtime.x11_visual,
 		AllocNone);
 
+	for (enum gpudl_system_cursor i = 0; i < GPUDL_CURSOR_END; i++) {
+		unsigned int shape;
+		switch (i) {
+			case GPUDL_CURSOR_DEFAULT: shape = XC_left_ptr; break;
+			case GPUDL_CURSOR_HAND:    shape = XC_hand1; break;
+			case GPUDL_CURSOR_H_ARROW: shape = XC_sb_h_double_arrow; break;
+			case GPUDL_CURSOR_V_ARROW: shape = XC_sb_v_double_arrow; break;
+			case GPUDL_CURSOR_CROSS:   shape = XC_fleur; break;
+			case GPUDL_CURSOR_END: break;
+		}
+		gpudl__runtime.cursors[i].cursor = XCreateFontCursor(gpudl__runtime.x11_display, shape);
+		gpudl__runtime.cursors[i].in_use = 1;
+	}
+
+	gpudl__runtime.x11_color_white.red = 0xffff;
+	gpudl__runtime.x11_color_white.green = 0xffff;
+	gpudl__runtime.x11_color_white.blue = 0xffff;
+	gpudl__runtime.x11_color_black.red = 0;
+	gpudl__runtime.x11_color_black.green = 0;
+	gpudl__runtime.x11_color_black.blue = 0;
+
+	XAllocColor(gpudl__runtime.x11_display, gpudl__runtime.x11_colormap, &gpudl__runtime.x11_color_white);
+	XAllocColor(gpudl__runtime.x11_display, gpudl__runtime.x11_colormap, &gpudl__runtime.x11_color_black);
 }
 
 void gpudl_set_required_limits(WGPULimits* limits)
@@ -700,7 +746,7 @@ WGPUTextureView gpudl_render_begin(int window_id)
 	}
 }
 
-void gpudl_render_end()
+void gpudl_render_end(void)
 {
 	assert((gpudl__runtime.rendering_window_id > 0) && "not rendering a window");
 	struct gpudl__window* win = gpudl__get_window(gpudl__runtime.rendering_window_id);
@@ -713,6 +759,123 @@ void gpudl_render_end()
 WGPUTextureFormat gpudl_get_preferred_swap_chain_texture_format()
 {
 	return gpudl__runtime.wgpu_swap_chain_format;
+}
+
+void gpudl_set_cursor(int cursor)
+{
+	assert(0 <= cursor && cursor < GPUDL__MAX_CURSORS);
+	XDefineCursor(gpudl__runtime.x11_display, RootWindow(gpudl__runtime.x11_display, gpudl__runtime.x11_screen), gpudl__runtime.cursors[cursor].cursor);
+}
+
+// bitmap height is defined by the number of lines in string; width is defined
+// by string line length (each line must have same width). valid characters:
+//   ' '  mask=0
+//   '?'  mask=0, hotspot
+//   '.'  mask=1, color=black
+//   ':'  mask=1, color=black, hotspot
+//   'x'  mask=1, color=white
+//   'X'  mask=1, color=white, hotspot
+// bitmap must define 0 or 1 hotspots
+int gpudl_make_bitmap_cursor(const char* bitmap)
+{
+	int width = 0;
+	int height = 0;
+
+	{
+		const char* p = bitmap;
+		while (*p != 0) {
+			const char* p0 = p;
+			while (*p != 0 && *p != '\n') p++;
+			const char* p1 = p++;
+			const int row_width = p1-p0;
+			if (width == 0) {
+				width = row_width;
+			} else {
+				assert((width == row_width) && "inconsistent row width");
+			}
+			height++;
+		}
+	}
+	assert((width > 0 && height > 0) && "empty bitmap?");
+
+	const int width_in_bytes = (width+7) >> 3;
+	const int bytes_in_bitmap = width_in_bytes * height;
+
+	Display* dpy = gpudl__runtime.x11_display;
+	Window drawable = DefaultRootWindow(dpy);
+
+	char* source_data = calloc(1, bytes_in_bitmap);
+	char* mask_data = calloc(1, bytes_in_bitmap);
+
+	int hotspot_set = 0;
+	int hotspot_x = 0;
+	int hotspot_y = 0;
+	{
+		const char* p = bitmap;
+		for (int y = 0; y < height; y++) {
+			for (int x = 0; x < width; x++) {
+				int is_mask = 0;
+				int is_hotspot = 0;
+				int color = 0;
+
+				char c = *(p++);
+				switch (c) {
+				case ' ': break;
+				case '?': is_hotspot = 1; break;
+				case '.': is_mask = 1; color = 0; break;
+				case ':': is_mask = 1; color = 0; is_hotspot = 1; break;
+				case 'x': is_mask = 1; color = 1; break;
+				case 'X': is_mask = 1; color = 1; is_hotspot = 1; break;
+				default:
+					fprintf(stderr, "invalid character '%c' at %d,%d\n", c, x, y);
+					abort();
+				}
+
+				if (is_hotspot) {
+					assert(!hotspot_set && "multiple hotspots in bitmap");
+					hotspot_x = x;
+					hotspot_y = y;
+				}
+
+				{
+					const int i = (x>>3) + y*width_in_bytes;
+					assert(0 <= i && i < bytes_in_bitmap);
+					const int m = 1<<(x&7);
+					if (is_mask) mask_data[i] |= m;
+					if (color)   source_data[i] |= m;
+				}
+			}
+			p++;
+		}
+	}
+
+	Pixmap source = XCreateBitmapFromData(dpy, drawable, source_data, width, height);
+	Pixmap mask = XCreateBitmapFromData(dpy, drawable, mask_data, width, height);
+
+	free(source_data);
+	free(mask_data);
+
+	Cursor cursor = XCreatePixmapCursor(
+		gpudl__runtime.x11_display,
+		source,
+		mask,
+		&gpudl__runtime.x11_color_white,
+		&gpudl__runtime.x11_color_black,
+		hotspot_x,
+		hotspot_y);
+
+	XFreePixmap(dpy, source);
+	XFreePixmap(dpy, mask);
+
+	for (int i = GPUDL_CURSOR_END; i < GPUDL__MAX_CURSORS; i++) {
+		struct gpudl__cursor* cc = &gpudl__runtime.cursors[i];
+		if (cc->in_use) continue;
+		cc->in_use = 1;
+		cc->cursor = cursor;
+		return i;
+	}
+
+	assert(!"too many cursors");
 }
 
 #if 0
