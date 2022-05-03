@@ -1,4 +1,4 @@
-LDLIBS+=-lX11 -lm
+LDLIBS+=-lX11 -lm -ldl
 CFLAGS+=-Wall
 CFLAGS+=-I.. -I.
 all: demo
