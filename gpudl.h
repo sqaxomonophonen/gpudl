@@ -160,6 +160,7 @@ struct gpudl_event {
 };
 
 void gpudl_init();
+void gpudl_set_required_limits(WGPULimits* limits);
 int gpudl_window_open(const char* title);
 WGPUSurface gpudl_window_get_surface(int window_id);
 void gpudl_window_get_size(int window_id, int* width, int* height);
@@ -198,7 +199,7 @@ struct gpudl__window {
 	int height;
 };
 
-struct gpudl__runtime {
+static struct gpudl__runtime {
 	int is_initialized;
 
 	int serial_counter;
@@ -210,6 +211,8 @@ struct gpudl__runtime {
 	WGPUQueue         wgpu_queue;
 	WGPUPresentMode   wgpu_present_mode;
 	WGPUTextureFormat wgpu_swap_chain_format;
+
+	WGPULimits limits;
 
 	int n_windows;
 	struct gpudl__window windows[GPUDL__MAX_WINDOWS];
@@ -224,10 +227,8 @@ struct gpudl__runtime {
 	int      x11_depth;
 	Colormap x11_colormap;
 	Atom     x11_WM_DELETE_WINDOW;
-};
+} gpudl__runtime;
 
-
-static struct gpudl__runtime gpudl__runtime;
 
 static int gpudl__x_error_handler(Display* display, XErrorEvent* event) {
         fprintf(stderr, "X11 ERROR?\n");
@@ -269,6 +270,8 @@ void gpudl_init()
 
 	gpudl__runtime.wgpu_present_mode = WGPUPresentMode_Fifo; // XXX
 
+	gpudl__runtime.limits.maxBindGroups = 4;
+
 	XSetErrorHandler(gpudl__x_error_handler);
 	XInitThreads();
 
@@ -291,6 +294,11 @@ void gpudl_init()
 		gpudl__runtime.x11_visual,
 		AllocNone);
 
+}
+
+void gpudl_set_required_limits(WGPULimits* limits)
+{
+	memcpy(&gpudl__runtime.limits, limits, sizeof *limits);
 }
 
 static int gpudl__get_next_serial()
@@ -380,6 +388,11 @@ static void gpudl__wgpu_post_init(struct gpudl__window* win)
 		&gpudl__runtime.wgpu_adapter);
 	assert((gpudl__runtime.wgpu_adapter != NULL) && "got no adapter; expected wgpuInstanceRequestAdapter() to not actually be async");
 
+	WGPURequiredLimits* required_limits = &(WGPURequiredLimits){
+		.nextInChain = NULL,
+	};
+	memcpy(&required_limits->limits, &gpudl__runtime.limits, sizeof required_limits->limits);
+
 	wgpuAdapterRequestDevice(
 		gpudl__runtime.wgpu_adapter,
 		&(WGPUDeviceDescriptor){
@@ -392,12 +405,7 @@ static void gpudl__wgpu_post_init(struct gpudl__window* win)
 				.label = "Device",
 				.tracePath = NULL,
 			},
-			.requiredLimits = &(WGPURequiredLimits){
-				.nextInChain = NULL,
-				.limits = (WGPULimits){
-					.maxBindGroups = 1,
-				},
-			},
+			.requiredLimits = required_limits,
 		},
 		gpudl__request_device_callback,
 		&gpudl__runtime.wgpu_device);
