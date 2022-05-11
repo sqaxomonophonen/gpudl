@@ -401,11 +401,11 @@ int main(int argc, char** argv)
 			case GPUDL_BUTTON:
 				printf("btn %d %d\n", e.button.which, e.button.pressed);
 				if (e.button.pressed) {
-					if (e.button.which == 1) {
+					if (e.button.which == GPUDL_BUTTON_LEFT) {
 						arrput(windows, ((struct window) {
 							.id = gpudl_window_open("gpudl/n"),
 						}));
-					} else if (e.button.which == 3) {
+					} else if (e.button.which == GPUDL_BUTTON_RIGHT) {
 						do_close_window_id = e.window_id;
 					}
 				}

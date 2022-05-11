@@ -100,6 +100,15 @@ typedef void (*WGPUProcSetLogLevel)(WGPULogLevel level);
 GPUDL_WGPU_PROCS
 #undef GPUDL_WGPU_PROC
 
+enum gpudl_button {
+	GPUDL_BUTTON_LEFT,
+	GPUDL_BUTTON_MIDDLE,
+	GPUDL_BUTTON_RIGHT,
+	//GPUDL_BUTTON_X1,
+	//GPUDL_BUTTON_X2,
+	GPUDL_BUTTON_END,
+};
+
 enum gpudl_event_type {
 	GPUDL_MOTION = 1,
 	GPUDL_BUTTON,
@@ -147,7 +156,7 @@ struct gpudl_event_motion {
 };
 
 struct gpudl_event_button {
-	int which;
+	enum gpudl_button which;
 	int pressed;
 	float x;
 	float y;
@@ -640,16 +649,20 @@ int gpudl_poll_event(struct gpudl_event* e)
 			e->type = GPUDL_UNFOCUS;
 			return 1;
 		case ButtonPress:
-		case ButtonRelease:
+		case ButtonRelease: {
 			e->type = GPUDL_BUTTON;
-			if (1 <= xe.xbutton.button && xe.xbutton.button <= 3) {
-				e->button.which = xe.xbutton.button;
+			const int b = xe.xbutton.button;
+			if (1 <= b && b <= 3) {
+				e->button.which =
+					b == 1 ? GPUDL_BUTTON_LEFT :
+					b == 2 ? GPUDL_BUTTON_MIDDLE :
+					b == 3 ? GPUDL_BUTTON_RIGHT : 0;
 				e->button.pressed = (xe.type == ButtonPress);
 				e->button.x = xe.xbutton.x;
 				e->button.y = xe.xbutton.y;
 				return 1;
 			}
-			break;
+			} break;
 		case MotionNotify:
 			e->type = GPUDL_MOTION;
 			e->motion.x = xe.xmotion.x;
