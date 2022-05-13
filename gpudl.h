@@ -165,6 +165,7 @@ struct gpudl_event_button {
 struct gpudl_event_key {
 	int pressed;
 	int code;
+	int codepoint;
 };
 
 struct gpudl_event {
@@ -190,6 +191,7 @@ void gpudl_render_end(void);
 WGPUTextureFormat gpudl_get_preferred_swap_chain_texture_format();
 void gpudl_set_cursor(int cursor);
 int gpudl_make_bitmap_cursor(const char* bitmap);
+int gpudl_utf8_decode(const char** c0z, int* n);
 
 #ifdef GPUDL_IMPLEMENTATION
 
@@ -216,6 +218,7 @@ struct gpudl__window {
 	WGPUSurface         wgpu_surface;
 	WGPUSwapChain       wgpu_swap_chain;
 	Window x11_window;
+	XIC    x11_ic;
 	int width;
 	int height;
 };
@@ -254,6 +257,7 @@ static struct gpudl__runtime {
 	int      x11_depth;
 	Colormap x11_colormap;
 	Atom     x11_WM_DELETE_WINDOW;
+	XIM      x11_im;
 
 	XColor   x11_color_white;
 	XColor   x11_color_black;
@@ -265,6 +269,35 @@ static struct gpudl__runtime {
 static int gpudl__x_error_handler(Display* display, XErrorEvent* event) {
         fprintf(stderr, "X11 ERROR?\n");
 	return 0;
+}
+
+int gpudl_utf8_decode(const char** c0z, int* n)
+{
+	const unsigned char** c0 = (const unsigned char**)c0z;
+	if (*n <= 0) return -1;
+	unsigned char c = **c0;
+	(*n)--;
+	(*c0)++;
+	if ((c & 0x80) == 0) return c & 0x7f;
+	int mask = 192;
+	int d;
+	for (d = 1; d <= 3; d++) {
+		int match = mask;
+		mask = (mask >> 1) | 0x80;
+		if ((c & mask) == match) {
+			int codepoint = (c & ~mask) << (6*d);
+			while (d > 0 && *n > 0) {
+				c = **c0;
+				if ((c & 192) != 128) return -1;
+				(*c0)++;
+				(*n)--;
+				d--;
+				codepoint += (c & 63) << (6*d);
+			}
+			return d == 0 ? codepoint : -1;
+		}
+	}
+	return -1;
 }
 
 void gpudl_init()
@@ -325,6 +358,9 @@ void gpudl_init()
 		gpudl__runtime.x11_root_window,
 		gpudl__runtime.x11_visual,
 		AllocNone);
+	gpudl__runtime.x11_im = XOpenIM(
+		gpudl__runtime.x11_display,
+		NULL, NULL, NULL);
 
 	for (enum gpudl_system_cursor i = 0; i < GPUDL_CURSOR_END; i++) {
 		unsigned int shape;
@@ -512,6 +548,17 @@ int gpudl_window_open(const char* title)
 		}
 	);
 	assert(win->x11_window && "XCreateWindow() failed");
+
+	win->x11_ic = XCreateIC(
+		gpudl__runtime.x11_im,
+		XNInputStyle,
+		XIMPreeditNothing | XIMStatusNothing,
+		XNClientWindow,
+		win->x11_window,
+		XNFocusWindow,
+		win->x11_window,
+		NULL);
+	assert(win->x11_ic != NULL);
 
 	XStoreName(gpudl__runtime.x11_display, win->x11_window, title);
 	XMapWindow(gpudl__runtime.x11_display, win->x11_window);
@@ -724,6 +771,15 @@ int gpudl_poll_event(struct gpudl_event* e)
 				}
 			}
 			e->key.code = code;
+			if (win && xe.type == KeyPress) {
+				char buf[8];
+				int len = Xutf8LookupString(win->x11_ic, &xe.xkey, buf, sizeof buf, NULL, NULL);
+				if (len > 0) {
+					const char* p = &buf[0];
+					int codepoint = gpudl_utf8_decode(&p, &len);
+					if (codepoint > 0) e->key.codepoint = codepoint;
+				}
+			}
 			return 1;
 			} break;
 		case ClientMessage: {
