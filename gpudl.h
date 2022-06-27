@@ -47,8 +47,8 @@ typedef void (*WGPUProcSetLogLevel)(WGPULogLevel level);
 	GPUDL_WGPU_PROC(CommandEncoderCopyTextureToBuffer) \
 	GPUDL_WGPU_PROC(CommandEncoderCopyTextureToTexture) \
 	GPUDL_WGPU_PROC(CommandEncoderFinish) \
-	GPUDL_WGPU_PROC(ComputePassEncoderDispatch) \
-	GPUDL_WGPU_PROC(ComputePassEncoderDispatchIndirect) \
+	GPUDL_WGPU_PROC(ComputePassEncoderDispatchWorkgroups) \
+	GPUDL_WGPU_PROC(ComputePassEncoderDispatchWorkgroupsIndirect) \
 	GPUDL_WGPU_PROC(ComputePassEncoderEnd) \
 	GPUDL_WGPU_PROC(ComputePassEncoderSetBindGroup) \
 	GPUDL_WGPU_PROC(ComputePassEncoderSetPipeline) \
