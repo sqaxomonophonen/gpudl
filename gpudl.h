@@ -2141,13 +2141,11 @@ int gpudl_poll_event(struct gpudl_event* e)
 					const char* p = &buf[0];
 					int codepoint = gpudl_utf8_decode(&p, &len);
 					if (codepoint >= 0) {
-						// XXX this hack makes [ctrl]+[a] yield codepoint 'a' instead of 1
-						// (1 as in "\x01"; a control code). Should this be configurable?
-						// I've heard of long-bearded men from olden days, who will press
-						// [ctrl]+[h] instead of [backspace] until the day they die(d). And
-						// that's fair actually. I just don't personally see how any
-						// application, other than a terminal emulator, could want this? Tell
-						// me your stories!
+						// define this if you think [ctrl]+[h] should be backspace and not [ctrl]+[h]
+						// you long bearded motherf^H^H^H^H^H^H^H^H^H^H^H^H^H^H^H^H^H^H^H^H^H^H^H^H
+						#ifdef GPUDL_I_HAVE_A_SUFFICIENTLY_LONG_BEARD // TODO upgrade to gpudl_i_have_a_sufficiently_long_beard()?
+						ke->codepoint = codepoint;
+						#else
 						ke->codepoint =
 							((0 <= codepoint && codepoint < ' ') || codepoint == 0x7f)
 							? fallback_sym
@@ -2157,6 +2155,7 @@ int gpudl_poll_event(struct gpudl_event* e)
 						// because [shift]+[a] gives fallback_sym='A' with Xutf8LookupString(), but
 						// fallback_sym='a' with XLookupKeysym(). So this weird, crappy inconsistency
 						// actually proves useful here, "thanks".
+						#endif
 					}
 				}
 			}
