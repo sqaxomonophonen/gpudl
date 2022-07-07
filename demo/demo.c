@@ -411,8 +411,8 @@ int main(int argc, char** argv)
 				}
 				break;
 			case GPUDL_KEY:
-				printf("KEY code=%d pressed=%d\n", e.key.code, e.key.pressed);
-				if (e.key.code == '\033' && e.key.pressed) {
+				printf("KEY keysym=%d pressed=%d\n", e.key.keysym, e.key.pressed);
+				if (e.key.keysym == '\033' && e.key.pressed) {
 					do_close_window_id = e.window_id;
 				}
 				break;
