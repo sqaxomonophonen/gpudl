@@ -231,6 +231,7 @@ int gpudl_utf8_decode(const char** c0z, int* n);
 #include <string.h>
 
 #include <dlfcn.h>
+#include <locale.h>
 
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
@@ -365,6 +366,12 @@ void gpudl_init()
 	gpudl__runtime.wgpu_present_mode = WGPUPresentMode_Fifo; // XXX
 
 	gpudl__runtime.limits.maxBindGroups = 4;
+
+	// this inconspicuous boilerplate line seems to have weird and deep
+	// implications for keyboard input:
+	//   without setlocale():   [compose],[a],[e] => "æ", [compose],[a],[a] => "å", [compose],[o],[a] => no KeyPress event at all
+	//   with setlocale():      [compose],[a],[e] => "æ", [compose],[a],[a] => "å", [compose],[o],[a] => "å"
+	setlocale(LC_ALL, "");
 
 	XSetErrorHandler(gpudl__x_error_handler);
 	XInitThreads();
