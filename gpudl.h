@@ -587,12 +587,9 @@ int gpudl_window_open(const char* title)
 
 	win->x11_ic = XCreateIC(
 		gpudl__runtime.x11_im,
-		XNInputStyle,
-		XIMPreeditNothing | XIMStatusNothing,
-		XNClientWindow,
-		win->x11_window,
-		XNFocusWindow,
-		win->x11_window,
+		XNInputStyle,      XIMPreeditNothing | XIMStatusNothing,
+		XNClientWindow,    win->x11_window,
+		XNFocusWindow,     win->x11_window,
 		NULL);
 	assert(win->x11_ic != NULL);
 
