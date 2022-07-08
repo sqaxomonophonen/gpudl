@@ -724,9 +724,11 @@ int gpudl_poll_event(struct gpudl_event* e)
 			return 1;
 		case FocusIn:
 			e->type = GPUDL_FOCUS;
+			if (xe.xfocus.mode != NotifyGrab && win && win->x11_ic) XSetICFocus(win->x11_ic);
 			return 1;
 		case FocusOut:
 			e->type = GPUDL_UNFOCUS;
+			if (xe.xfocus.mode != NotifyGrab && win && win->x11_ic) XUnsetICFocus(win->x11_ic);
 			return 1;
 		case ButtonPress:
 		case ButtonRelease: {
