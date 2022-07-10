@@ -126,6 +126,7 @@ enum gpudl_system_cursor {
 	GPUDL_CURSOR_H_ARROW,
 	GPUDL_CURSOR_V_ARROW,
 	GPUDL_CURSOR_CROSS,
+	GPUDL_CURSOR_TEXT,
 	GPUDL_CURSOR_END
 };
 
@@ -406,6 +407,7 @@ void gpudl_init()
 			case GPUDL_CURSOR_H_ARROW: shape = XC_sb_h_double_arrow; break;
 			case GPUDL_CURSOR_V_ARROW: shape = XC_sb_v_double_arrow; break;
 			case GPUDL_CURSOR_CROSS:   shape = XC_fleur; break;
+			case GPUDL_CURSOR_TEXT:    shape = XC_xterm; break;
 			case GPUDL_CURSOR_END: break;
 		}
 		gpudl__runtime.cursors[i].cursor = XCreateFontCursor(gpudl__runtime.x11_display, shape);
