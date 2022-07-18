@@ -226,7 +226,7 @@ int gpudl_poll_event(struct gpudl_event* e);
 WGPUTextureView gpudl_render_begin(int window_id);
 void gpudl_render_end(void);
 WGPUTextureFormat gpudl_get_preferred_swap_chain_texture_format();
-void gpudl_set_cursor(int cursor);
+void gpudl_set_cursor(int cursor); // should be called between gpudl_render_begin()/end()
 int gpudl_make_bitmap_cursor(const char* bitmap);
 int gpudl_utf8_decode(const char** c0z, int* n);
 
@@ -2230,7 +2230,8 @@ WGPUTextureFormat gpudl_get_preferred_swap_chain_texture_format()
 void gpudl_set_cursor(int cursor)
 {
 	assert(0 <= cursor && cursor < GPUDL_MAX_CURSORS);
-	XDefineCursor(gpudl__runtime.x11_display, RootWindow(gpudl__runtime.x11_display, gpudl__runtime.x11_screen), gpudl__runtime.cursors[cursor].cursor);
+	struct gpudl__window* win = gpudl__get_window(gpudl__runtime.rendering_window_id);
+	XDefineCursor(gpudl__runtime.x11_display, win->x11_window, gpudl__runtime.cursors[cursor].cursor);
 }
 
 // bitmap height is defined by the number of lines in string; width is defined
