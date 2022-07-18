@@ -1,5 +1,12 @@
 #ifndef GPUDL_H_
 
+// NOTE: if you re-#define GPUDL_MAX_CURSORS_LOG2, you MUST do it in ALL
+// #includes of gpudl.h
+#ifndef GPUDL_MAX_CURSORS_LOG2
+#define GPUDL_MAX_CURSORS_LOG2 (8)
+#endif
+#define GPUDL_MAX_CURSORS (1 << (GPUDL_MAX_CURSORS_LOG2))
+
 // TODO inline webgpu.h? or is that a bad idea?
 #define WGPU_SKIP_DECLARATIONS
 #include "webgpu.h"
@@ -254,7 +261,6 @@ struct gpudl__window {
 	int height;
 };
 
-#define GPUDL__MAX_CURSORS (256)
 struct gpudl__cursor {
 	int in_use;
 	Cursor cursor;
@@ -293,7 +299,7 @@ static struct gpudl__runtime {
 	XColor   x11_color_white;
 	XColor   x11_color_black;
 
-	struct gpudl__cursor cursors[GPUDL__MAX_CURSORS];
+	struct gpudl__cursor cursors[GPUDL_MAX_CURSORS];
 } gpudl__runtime;
 
 
@@ -2223,7 +2229,7 @@ WGPUTextureFormat gpudl_get_preferred_swap_chain_texture_format()
 
 void gpudl_set_cursor(int cursor)
 {
-	assert(0 <= cursor && cursor < GPUDL__MAX_CURSORS);
+	assert(0 <= cursor && cursor < GPUDL_MAX_CURSORS);
 	XDefineCursor(gpudl__runtime.x11_display, RootWindow(gpudl__runtime.x11_display, gpudl__runtime.x11_screen), gpudl__runtime.cursors[cursor].cursor);
 }
 
@@ -2327,7 +2333,7 @@ int gpudl_make_bitmap_cursor(const char* bitmap)
 	XFreePixmap(dpy, source);
 	XFreePixmap(dpy, mask);
 
-	for (int i = GPUDL_CURSOR_END; i < GPUDL__MAX_CURSORS; i++) {
+	for (int i = GPUDL_CURSOR_END; i < GPUDL_MAX_CURSORS; i++) {
 		struct gpudl__cursor* cc = &gpudl__runtime.cursors[i];
 		if (cc->in_use) continue;
 		cc->in_use = 1;
